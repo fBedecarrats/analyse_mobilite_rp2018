@@ -3,6 +3,8 @@ title: "Analyse des trajets domicile-travail en 2018"
 author: "Florent Bédécarrats (Nantes Métropole)"
 date: "22/09/2021"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 
@@ -57,3 +59,15 @@ GITer des résultats
 Raffraichir les mises à jour du répo principal.
 Fonctions
 Filtrer les données 
+
+```{r}
+library(dplyr)
+com_nm <- EPCI_FR %>% 
+  filter(LIBEPCI == "Nantes Métropole") %>%
+  pull(CODGEO)
+
+rp_nm <- flux %>%
+  filter(COMMUNE %in% com_nm)
+
+```
+
