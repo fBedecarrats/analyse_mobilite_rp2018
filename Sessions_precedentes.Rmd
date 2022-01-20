@@ -71,3 +71,23 @@ rp_nm <- flux %>%
 
 ```
 
+# Session 4 Manipuler les données (suite)
+
+Créer un bloc de code
+Modifier le filtre qui crée rn_np pour inclure aussi les individus viennent
+travailler dans la Métropole nantaise.
+Réaliser quelques statistiques élémentaires :
+- combien d'individus recensés résident à Nantes Métropole ?
+- combien d'individus recensés travaillent à Nantes Métropole ?
+- combien d'individus recensés résident et travaillent à Nantes Métropole ?
+- Combien d'individus recensés travaillent mais ne résident pas 
+  à Nantes Métropole ?
+- Quelles sont les 3 communes à partir desquelles (en ordre décroissant) on a
+  le plus de flux entrant dans la Ville de Nantes ?
+  
+```{r}
+rp_nm2 <- flux %>%
+  filter(COMMUNE %in% com_nm | )
+```
+
+
