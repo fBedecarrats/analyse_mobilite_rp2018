@@ -26,7 +26,7 @@ Flux : https://www.insee.fr/fr/statistiques/5395749?sommaire=5395764
 # Import de fichiers
 https://juba.github.io/tidyverse/07-import.html
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(readr)
 library(readxl)
 
@@ -60,7 +60,7 @@ Raffraichir les mises à jour du répo principal.
 Fonctions
 Filtrer les données 
 
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 library(dplyr)
 com_nm <- EPCI_FR %>% 
   filter(LIBEPCI == "Nantes Métropole") %>%
@@ -87,7 +87,23 @@ Réaliser quelques statistiques élémentaires :
   
 ```{r}
 rp_nm2 <- flux %>%
-  filter(COMMUNE %in% com_nm | )
+  filter(COMMUNE %in% com_nm | DCLT %in% com_nm)
+
+stats <- rp_nm2 %>%
+  group_by(DCLT) %>%
+  summarize(stat_resid = sum(COMMUNE %in% com_nm),
+            stat_trav = sum(DCLT %in% com_nm),
+            stat_res_trav = sum(COMMUNE %in% com_nm & DCLT %in% com_nm),
+            stat_trav_not_res = sum(!(COMMUNE %in% com_nm) &  DCLT %in% com_nm)) %>%
+  arrange(desc(stat_resid))
+
+
 ```
 
+Prochaine séance :
+- filtrer les 30 plus élevés
+- réinsérer le nom des communes
+- mettre en forme le rapport
+- commenter le texte
+- style du code
 
