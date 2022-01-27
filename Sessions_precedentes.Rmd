@@ -85,7 +85,7 @@ Réaliser quelques statistiques élémentaires :
 - Quelles sont les 3 communes à partir desquelles (en ordre décroissant) on a
   le plus de flux entrant dans la Ville de Nantes ?
   
-```{r}
+```{r message=FALSE, warning=FALSE}
 rp_nm2 <- flux %>%
   filter(COMMUNE %in% com_nm | DCLT %in% com_nm)
 
@@ -101,9 +101,48 @@ stats <- rp_nm2 %>%
 ```
 
 Prochaine séance :
-- filtrer les 30 plus élevés
+- filtrer les 10 plus élevés
 - réinsérer le nom des communes
-- mettre en forme le rapport
+- mettre en forme le tableau
 - commenter le texte
 - style du code
+
+# Session 5 : Manipuler des données (suite)
+
+```{r}
+
+# On extrait les communes de Nantes Métropole en gardant les noms
+communes_NM <- EPCI_FR %>% 
+  filter(LIBEPCI == "Nantes Métropole") %>%
+  select(`Numéro de commune` = CODGEO, `Nom de la commune` = LIBGEO)
+
+
+# Pour améliorer la lisitbilité du code : utiliser des commentaires 
+# et donner des noms explicites aux variables.
+stats <- flux %>%
+  rename(`Commune de travail` = DCLT, `Commune de résidence` = COMMUNE) %>%
+  filter(`Commune de travail` %in% communes_NM$`Numéro de commune`) %>%
+  left_join(communes_NM, by = c("Commune de travail" = "Numéro de commune")) %>%
+  group_by(`Commune de travail`, `Nom de la commune`) %>%
+  summarize(`Total de personnent travaillant dans la commune` = n(), # Total
+            `Résident dans leur commune de travail` = # Résident
+              sum(`Commune de résidence` %in% communes_NM$`Numéro de commune`),
+            `Ne résident pas dans leur commune de travail` = # Ne résident pas
+              sum(!`Commune de résidence` %in% com_nm),
+            `Part des travailleurs qui résident dans la commune` = # Proportion
+              `Ne résident pas dans leur commune de travail` / `Total de personnent travaillant dans la commune`) %>%
+  # On ordonne les résultats (le commentaire peut être au milieu du pipe)
+  arrange(desc(`Part des travailleurs qui résident dans la commune`)) 
+
+
+library(knitr) # Cette librairie contient la fonction kable qui formate bien
+kable(stats) # par défaut optimisé pour l'html (des options pour word ou pdf)
+
+```
+
+
+
+
+
+
 
