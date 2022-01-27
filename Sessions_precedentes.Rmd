@@ -119,10 +119,12 @@ communes_NM <- EPCI_FR %>%
 
 # Pour améliorer la lisitbilité du code : utiliser des commentaires 
 # et donner des noms explicites aux variables.
-stats <- flux %>%
+flux_nm <- flux %>%
   rename(`Commune de travail` = DCLT, `Commune de résidence` = COMMUNE) %>%
   filter(`Commune de travail` %in% communes_NM$`Numéro de commune`) %>%
-  left_join(communes_NM, by = c("Commune de travail" = "Numéro de commune")) %>%
+  left_join(communes_NM, by = c("Commune de travail" = "Numéro de commune")) 
+
+stats_dest_nm <- flux_nm %>%
   group_by(`Commune de travail`, `Nom de la commune`) %>%
   summarize(`Total de personnent travaillant dans la commune` = n(), # Total
             `Résident dans leur commune de travail` = # Résident
@@ -137,6 +139,18 @@ stats <- flux %>%
 
 library(knitr) # Cette librairie contient la fonction kable qui formate bien
 kable(stats) # par défaut optimisé pour l'html (des options pour word ou pdf)
+
+```
+
+Prochaine session 
+
+Revoir le formatage 
+Point sur le style de code
+Question des graphiques
+
+```{r}
+
+
 
 ```
 
