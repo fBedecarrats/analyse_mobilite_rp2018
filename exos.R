@@ -8,17 +8,33 @@ stats %>%
   theme()
 library(forcats)
 flux_nm <- flux_nm %>%
-  mutate(
-    `Mode de transport` = as.character
-           fct_recode(as.character(TRANS), c(Aucun = "1",
-                                               Marche = "2",
-                                               Vélo = "3",
-                                               Moto = "4",
-                                               Voirure = "5",
-                                               TC = "6")))
-levels(flux_nm$`Mode de transport`)
+  mutate(`Mode de transport` = factor(TRANS),
+         `Mode de transport` =  fct_recode(`Mode de transport`,
+                                           "Aucun" = "1",
+                                           "Marche" = "2",
+                                           "Vélo" = "3",
+                                           "Moto" = "4",
+                                           "Voirure" = "5",
+                                           "TC" = "6"))
+flux_nm %>%
   ggplot(aes(x = `Commune de travail`, fill = `Mode de transport`)) +
   geom_bar()
 
-  
+flux_nm <- flux %>%
+  rename(`Commune de travail` = DCLT, `Commune de résidence` = COMMUNE) %>%
+  filter(`Commune de travail` %in% communes_NM$`Numéro de commune`) %>%
+  left_join(communes_NM, by = c("Commune de travail" = "Numéro de commune"))
+
+flux_nm <- flux %>%
+  rename(`Commune de travail` = DCLT, `Commune de résidence` = COMMUNE) %>%
+  mutate(`Commune de travail` = ifelse(`Commune de travail` %in% communes_NM$`Numéro de commune`,
+                                       "Autre", `Commune de travail`),
+         )
+  filter(`Commune de travail` %in% communes_NM$`Numéro de commune`) %>%
+  left_join(communes_NM, by = c("Commune de travail" = "Numéro de commune"))
+
+
+flux_nm %>%
+  ggplot(aes(x = `Commune de travail`, fill = `Mode de transport`)) +
+  geom_bar()
   
