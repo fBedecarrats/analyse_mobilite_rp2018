@@ -60,25 +60,21 @@ flux_nm <- flux_nm %>%
                                          levels = ordre_communes),
          `Commune de travail` = factor(`Commune de travail`,
                                          levels = ordre_communes))
+
 # On représente la matrice origine destination
 flux_nm %>%
   ggplot(aes(x = "", fill = `Mode de transport`,
              weight = IPONDI)) + # On pondère à partir de l'échantillonage
   geom_bar(position = "fill") + # Pour afficher les résultats en proportion
-  facet_grid(`Commune de résidence` ~ `Commune de travail`) + # affichage en carreaux
-  # switch = "y") + # labels en ligne à gauche plutôt qu'à droite
+  facet_grid(`Commune de résidence` ~ `Commune de travail`, # affichage en carreaux
+             switch = "y") + # labels en ligne à gauche plutôt qu'à droite
   theme(axis.text = element_blank(), # pas de texte d'échelle 
         axis.ticks = element_blank(), # pas de tirets de repères
-        strip.text.y = element_text(angle = 0), # orientation des noms de communes en ligne 
+        strip.text.y.left = element_text(angle = 0), # orientation des noms de communes en ligne 
         strip.text.x = element_text(angle = 90), # orientation des noms de communes en colonnes
         panel.spacing = unit(0.2, "lines"),
         axis.title = element_blank(),
-        legend.position = c(1.05,1.16),
-        legend.title = element_blank(),
-        panel.background = element_rect(fill = "white"))
-# Autres options finalement pas retenues mais que je laisse là si on y revient
-        # legend.title = element_text(size = 9)
-        # legend.text = element_text(size = 8)
-        # legend.spacing.y = unit(-0.2, unit = "lines")) + 
-        # guides(fill = guide_legend(byrow = TRUE))
+        panel.background = element_rect(fill = "white"),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(nrow = 1))
   
