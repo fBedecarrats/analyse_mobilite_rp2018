@@ -5,7 +5,6 @@ WORK_DIR=/home/rstudio/analyse_mobilite_rp2018
 REPO_URL=https://github.com/fBedecarrats/analyse_mobilite_rp2018 # As initial
 DATA_DIR=${WORK_DIR}/data
 DOC_DIR=${WORK_DIR}/documentation
-INSEE_MOB=https://www.insee.fr/fr/statistiques/fichier/5395749/RP2018_mobpro_csv.zip
 
 # Git
 git clone $REPO_URL $WORK_DIR
@@ -16,7 +15,9 @@ mkdir $DATA_DIR
 chown -R rstudio:users $DATA_DIR
 cd $DATA_DIR
 wget https://www.insee.fr/fr/statistiques/fichier/5395749/RP2018_mobpro_csv.zip
+wget https://www.insee.fr/fr/statistiques/fichier/2510634/Intercommunalite_Metropole_au_01-01-2018.zip
 unzip RP2018_mobpro_csv.zip
+unzip Intercommunalite_Metropole_au_01-01-2018.zip
 
 mkdir $DOC_DIR
 chown -R rstudio:users $DOC_DIR
