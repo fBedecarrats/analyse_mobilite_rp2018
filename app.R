@@ -103,6 +103,12 @@ server <- function(input, output) {
                                                levels = ordre_communes),
                `Commune de travail` = factor(`Commune de travail`,
                                              levels = ordre_communes)) 
+      test <- flux_epci %>%
+        ggplot(aes(x = "", fill = `Mode de transport`,
+                   weight = IPONDI)) + # On pondère à partir de l'échantillonage
+        geom_bar(position = "fill") + # Pour afficher les résultats en proportion
+        facet_grid(`Commune de résidence` ~ `Commune de travail`)
+      
       graph <- flux_epci %>%
         ggplot(aes(x = "", fill = `Mode de transport`,
                    weight = IPONDI)) + # On pondère à partir de l'échantillonage
@@ -120,11 +126,7 @@ server <- function(input, output) {
         guides(fill = guide_legend(nrow = 1))
       
     })
-    flux_epci %>%
-      ggplot(aes(x = "", fill = `Mode de transport`,
-                 weight = IPONDI)) + # On pondère à partir de l'échantillonage
-      geom_bar(position = "fill") + # Pour afficher les résultats en proportion
-      facet_grid(`Commune de résidence` ~ `Commune de travail`)
+    
 }
 
 # Run the application 
