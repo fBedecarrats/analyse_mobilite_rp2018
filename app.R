@@ -49,7 +49,8 @@ ui <- fluidPage(
         sidebarPanel(
             selectInput("epci",
                         "Choisir une EPCI:",
-                        choices = unique(EPCI_FR$LIBEPCI),
+                        choices = c("CU Angers Loire Métropole", "Nantes Métropole"),
+                        #choices = unique(EPCI_FR$LIBEPCI),
                         selected = "Nantes Métropole")
         ),
 
@@ -81,8 +82,10 @@ server <- function(input, output) {
 
   
     output$matrice_od_commune_mode <- renderPlot({
+      my_epci = input$epci
+     # my_epci = "Nantes Métropole"
       # On liste les communes à garder
-      communes <- communes_interco(interco = input$epci)
+      communes <- communes_interco(interco = my_epci)
       # On filtre la donnée de flux pour ne garder que ces communes
       flux_epci <- flux %>%
         filter(COMMUNE %in% communes$CODGEO | DCLT %in% communes$CODGEO)
@@ -95,11 +98,12 @@ server <- function(input, output) {
         pull(`Commune de résidence`)
       
       # On génère la visualisation
-      flux_epci %>%
+      flux_epci <- flux_epci %>%
         mutate(`Commune de résidence` = factor(`Commune de résidence`,
                                                levels = ordre_communes),
                `Commune de travail` = factor(`Commune de travail`,
-                                             levels = ordre_communes)) %>%
+                                             levels = ordre_communes)) 
+      graph <- flux_epci %>%
         ggplot(aes(x = "", fill = `Mode de transport`,
                    weight = IPONDI)) + # On pondère à partir de l'échantillonage
         geom_bar(position = "fill") + # Pour afficher les résultats en proportion
@@ -116,7 +120,11 @@ server <- function(input, output) {
         guides(fill = guide_legend(nrow = 1))
       
     })
-      
+    flux_epci %>%
+      ggplot(aes(x = "", fill = `Mode de transport`,
+                 weight = IPONDI)) + # On pondère à partir de l'échantillonage
+      geom_bar(position = "fill") + # Pour afficher les résultats en proportion
+      facet_grid(`Commune de résidence` ~ `Commune de travail`)
 }
 
 # Run the application 
