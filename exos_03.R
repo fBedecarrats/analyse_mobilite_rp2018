@@ -12,10 +12,6 @@ flux <- vroom("data/FD_MOBPRO_2018.csv",
                  COMMUNE = "character",
                  DCLT = "factor",
                  IPONDI = "numeric",
-                 EMPL = "factor",
-                 NPERR = "factor",
-                 AGEREVQ = "integer",
-                 CS1 = "factor",
                  TRANS = "factor", 
                  ))
 
@@ -37,8 +33,6 @@ communes_interco <- function(interco, registre_interco = EPCI_FR) {
 
 communes_NM <- communes_interco("Nantes Métropole")
 
-
-
 flux_nm <- flux %>%
   filter(COMMUNE %in% communes_NM$CODGEO | DCLT %in% communes_NM$CODGEO) %>%
   left_join(rename(communes_NM, `Commune de résidence` = LIBGEO), 
@@ -52,6 +46,7 @@ flux_nm <- flux %>%
                                            "Moto" = "4",
                                            "Voiture" = "5",
                                            "TC" = "6"))
+
 # On crée une séquence de noms de communes ordonnée par nombre de flux
 # qu'on intitule : ordre_communes
 ordre_communes <- flux_nm %>%
@@ -60,6 +55,7 @@ ordre_communes <- flux_nm %>%
   arrange(desc(flux)) %>%
   filter(!is.na(`Commune de résidence`)) %>%
   pull(`Commune de résidence`)
+
 # On crée un facteur (càd liste de valeurs ordonnées) en classant par la 
 # séquence ordre_communes
 flux_nm <- flux_nm %>%
@@ -68,14 +64,14 @@ flux_nm <- flux_nm %>%
          `Commune de travail` = factor(`Commune de travail`,
                                          levels = ordre_communes))
 
+start <- Sys.time()
 test <- flux_nm %>%
   group_by(`Mode de transport`, `Commune de résidence`, `Commune de travail`) %>%
-  summarise(`Flux domicile-travail` = mean(IPONDI, na.rm = TRUE))
+  summarise(`Flux domicile-travail` = sum(IPONDI, na.rm = TRUE))
 
 # On représente la matrice origine destination
-flux_nm %>%
-  ggplot(aes(x = "", fill = `Mode de transport`,
-             weight = IPONDI)) + # On pondère à partir de l'échantillonage
+intermediaire %>%
+  ggplot(aes(x = "", fill = `Mode de transport`)) + # On pondère à partir de l'échantillonage
   geom_bar(position = "fill") + # Pour afficher les résultats en proportion
   facet_grid(`Commune de résidence` ~ `Commune de travail`, # affichage en carreaux
              switch = "y") + # labels en ligne à gauche plutôt qu'à droite
@@ -88,4 +84,26 @@ flux_nm %>%
         panel.background = element_rect(fill = "white"),
         legend.position = "bottom") +
   guides(fill = guide_legend(nrow = 1))
-  
+end <- Sys.time()
+duration1 <- end - start
+
+start <- Sys.time()
+# On représente la matrice origine destination
+flux_nm %>%
+  ggplot(aes(x = "", fill = `Mode de transport`)) + # On pondère à partir de l'échantillonage
+  geom_bar(position = "fill") + # Pour afficher les résultats en proportion
+  facet_grid(`Commune de résidence` ~ `Commune de travail`, # affichage en carreaux
+             switch = "y") + # labels en ligne à gauche plutôt qu'à droite
+  theme(axis.text = element_blank(), # pas de texte d'échelle 
+        axis.ticks = element_blank(), # pas de tirets de repères
+        strip.text.y.left = element_text(angle = 0), # orientation des noms de communes en ligne 
+        strip.text.x = element_text(angle = 90), # orientation des noms de communes en colonnes
+        panel.spacing = unit(0.2, "lines"),
+        axis.title = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(nrow = 1))
+  end <- Sys.time()
+  duration2 <- end - start
+  duration1
+  duration2
