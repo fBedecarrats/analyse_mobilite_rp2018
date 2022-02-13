@@ -7,6 +7,7 @@ editor_options:
   chunk_output_type: console
 ---
 
+NB : la modalité "vélo" a été introduite en 2017. Avant on avait juste "2 roues".
 
 # Session 1
 

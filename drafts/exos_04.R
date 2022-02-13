@@ -1,9 +1,10 @@
-library(readr)
-library(readxl)
-library(ggplot2)
-library(dplyr)
-library(forcats)
-library(vroom)
+library(vroom) # pour lire les csv (très rapide pour les 'gros' csv)
+library(readxl) # pour lire les fichiers excel (liste communes/epci)
+library(dplyr) # pour les manipulation de données
+library(tidyr) # pour les pivots
+library(forcats) # pour modifier des facteurs (variables catégorielles ordonnées)
+library(ggplot2) # pour les graphs
+library(tmap) # pour les cartes
 
 # Chargement des données
 # On utilise vroom qui est ~10x plus rapide pour lire de gros fichiers
@@ -138,7 +139,7 @@ get_communes <- function(x, geo = c("centre", "contour")) {
 
 # On va ensuite pouvoir vectoriser cette option, càd l'appeler de manière répétée
 # sur un vecteur
-od_map <- map_df(communes_NM$CODGEO, get_communes, "contour") %>%
+mobpro_choro_s <- map_df(communes_NM$CODGEO, get_communes, "contour") %>%
   bind_cols(communes_NM) %>%
   st_as_sf()
 
@@ -150,26 +151,74 @@ flux_travail <- flux_nm %>%
   group_by(`Commune de travail`) %>%
   summarise(travail = sum(IPONDI, na.rm = TRUE)) # pour avoir les valeurs en population
 
-od_map <- od_map %>%
+mobpro_choro_s <- mobpro_choro_s %>%
   left_join(flux_domicile, by = c("LIBGEO" = "Commune de résidence")) %>%
   left_join(flux_travail, by = c("LIBGEO" = "Commune de travail"))
 
 # On va maintenant pouvoir réaliser des cartes simples
 library(tmap) # un package pour faire des cartes thématiques assez simples
 # Un premier exemple vide
-qtm(od_map$geometry)
+qtm(mobpro_choro_s$geometry)
 
-qtm(od_map, fill="travail", fill.palette="viridis")
+# Ensuite on choisit la couleur de remplissage
+qtm(mobpro_choro_s, fill="travail", fill.palette="viridis")
+# On voit qu'on a besoin de spécifier les seuils de couleur
 
-tm_shape(od_map) + 
-  tm_fill(c("domicile", "travail"),  
-          palette = viridis::plasma(5),
-          breaks = c(0, 2000, 5000, 10000, 50000, 200000),
+qtm(mobpro_choro_s, fill="travail", fill.style="pretty")
+
+tm_shape(mobpro_choro_s) + 
+  tm_fill(c("domicile", "travail"),
+          #style = "fisher", # Pour une première approx avec des seuils pas ronds
+          breaks = c(100, 7500, 15000, 30000, 60000, 120000, 160000), # On arrondi un peu les seuils
           title = "Flux")  +
   tm_borders(col = "black", lwd = 0.5) + 
   tm_facets(free.scales = FALSE, ncol = 2) +
   tm_layout(panel.labels = c("Domicile", "Travail"))
 
+# On récupère le centre des communes 
+centres_communes_p <- mobpro_choro_s <- map_df(communes_NM$CODGEO, get_communes, "centre") %>%
+  bind_cols(select(communes_NM, LIBGEO)) # on leur rattache leur nom
 
+# On calcule les flux entre chaque paire de communes
+# d'abord avec 1 ligne par type de mode de transport (vélo, voiture...)
+mobpro_od <- flux_nm %>%
+  group_by(`Commune de résidence`, `Commune de travail`, `Mode de transport`) %>%
+  summarise(trajets = sum(IPONDI, na.rm = TRUE)) %>%
+  # on passe les modes en colonnes pour n'avoir plus qu'1 ligne par paire de communes
+  pivot_wider(names_from = `Mode de transport`, values_from = trajets)
+
+# On calcule les totaux (on pourrait le faire à partir des modes, 
+# mais ça marche aussi comme ça)
+mobpro_od <- flux_nm %>%
+  group_by(`Commune de résidence`, `Commune de travail`) %>% # sans mode de transport
+  summarise(total = sum(IPONDI, na.rm = TRUE)) %>%
+  right_join(mobpro_od, by = c("Commune de résidence", "Commune de travail"))
+
+# On associe les valeurs avec la localisation des centres des communes
+mobpro_od_p <- mobpro_od %>%
+  left_join(rename(centre_communes_p, # on vient mettre la géométrie correspondant à la commune de résidence
+                   geo_residence = geometry, # on renomme le champ géométrie pour savoir de laquelle il s'agit
+                   `Commune de résidence` = LIBGEO), # on harmonise le nom de commune pour simplifier la jointure
+            by = "Commune de résidence") %>% # on joint sur le nom de commune qui a maintenant le même nom
+  left_join(rename(centre_communes_p, # on vient mettre la géométrie correspondant à la commune de résidence
+                   geo_travail = geometry, # on renomme le champ géométrie pour savoir de laquelle il s'agit
+                   `Commune de travail` = LIBGEO), # on harmonise le nom de commune pour simplifier la jointure
+            by = "Commune de travail") %>% # on vient mettre la géométrie correspondant à la commune de résidence
+  relocate(starts_with("geo"), .before = 1) # on met les communes de géographie en début de table, requis pour 
+
+# On transforme les paires de points origine-destination en lignes
+mobpro_od_l <- od2line(mobpro_od_p, zones_od)
+
+library(sf)
+class(mobpro_od_p)
+# On rattache les valeurs
+centres_communes_p2 <- select(centres_communes_p, LIBGEO, geometry)
+
+mobpro_od2 <- mobpro_od %>%
+  filter(!is.na(`Commune de résidence`) & !is.na(`Commune de travail`)) %>%
+  mutate(`Commune de résidence` = as.character(`Commune de résidence`),
+         `Commune de travail` = as.character(`Commune de travail`))
+
+test <- od2line(flow = mobpro_od2, zones = centres_communes_p2)
 
 
