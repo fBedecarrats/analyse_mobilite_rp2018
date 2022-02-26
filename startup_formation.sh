@@ -13,21 +13,25 @@ chown -R rstudio:users $WORK_DIR
 # Folders to store data and documentation
 mkdir $DATA_DIR
 chown -R rstudio:users $DATA_DIR
-cd $DATA_DIR
-wget https://www.insee.fr/fr/statistiques/fichier/5395749/RP2018_mobpro_csv.zip
-wget https://www.insee.fr/fr/statistiques/fichier/2510634/Intercommunalite_Metropole_au_01-01-2018.zip
-unzip RP2018_mobpro_csv.zip
-unzip Intercommunalite_Metropole_au_01-01-2018.zip
+
+# Alternative data loading procedure for when S3 is down.
+# cd $DATA_DIR
+# wget https://www.insee.fr/fr/statistiques/fichier/5395749/RP2018_mobpro_csv.zip
+# wget https://www.insee.fr/fr/statistiques/fichier/2510634/Intercommunalite_Metropole_au_01-01-2018.zip
+# unzip RP2018_mobpro_csv.zip
+# unzip Intercommunalite_Metropole_au_01-01-2018.zip
 
 mkdir $DOC_DIR
 chown -R rstudio:users $DOC_DIR
-cd $DOC_DIR
-wget https://www.insee.fr/fr/statistiques/fichier/5395749/contenu_RP2018_mobpro.pdf
-# The copy from SSP Cloud S3 is broken (see https://github.com/InseeFrLab/sspcloud/issues/12)
-# We replace it with a wget
-# copy files from S3 : SUSPENDED
-# mc cp s3/fbedecarrats/diffusion/{FD_MOBPRO_2018.csv,commune2021.csv,Intercommunalite-Metropole_au_01-01-2021.xlsx,Varmod_MOBPRO_2018.csv} $DATA_DIR
-# mc cp s3/fbedecarrats/diffusion/contenu_RP2018_mobpro.pdf $DOC_DIR
+
+# Alternative data loading procedure for when S3 is down.
+# cd $DOC_DIR
+# wget https://www.insee.fr/fr/statistiques/fichier/5395749/contenu_RP2018_mobpro.pdf
+
+# copy files from S3 
+mc cp s3/fbedecarrats/diffusion/{FD_MOBPRO_2018.csv,commune2021.csv,Intercommunalite-Metropole_au_01-01-2021.xlsx,Varmod_MOBPRO_2018.csv} $DATA_DIR
+mc cp s3/fbedecarrats/diffusion/mobilites/Geovelo/{stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson,nantes-metropole-2022-02-26-2022-02-26.geojson} $DATA_DIR
+mc cp s3/fbedecarrats/diffusion/contenu_RP2018_mobpro.pdf $DOC_DIR
 
 # launch RStudio in the right project
 # Copied from InseeLab UtilitR
