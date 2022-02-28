@@ -1,0 +1,19 @@
+---
+title: "Analyse des données de Géovélo"
+author: "Document de travail, Nantes Métropole"
+date: "26/02/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(sf)
+
+freq_file <- "data/stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson"
+amenag_file <- "data/nantes-metropole-2022-02-26-2022-02-26.geojson"
+
+freq_axes_2021 <- read_sf(freq_file )
+amenagements <- read_sf(amenag_file)
+```
