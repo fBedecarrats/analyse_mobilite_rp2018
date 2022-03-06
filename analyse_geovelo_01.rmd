@@ -10,6 +10,8 @@ editor_options:
 ```{r}
 library(tidyverse)
 library(sf)
+library(tmap)
+library(tidygeocoder)
 
 freq_file <- "data/stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson"
 amenag_file <- "data/nantes-metropole-2022-02-26-2022-02-26.geojson"
@@ -17,3 +19,32 @@ amenag_file <- "data/nantes-metropole-2022-02-26-2022-02-26.geojson"
 freq_axes_2021 <- read_sf(freq_file )
 amenagements <- read_sf(amenag_file)
 ```
+
+
+```{r}
+tm_shape(freq_axes_2021) + 
+  tm_lines(col = "frequency",
+    palette = "YlOrRd",
+    style = "fisher", 
+    n = 20,
+    title.col = "Fréquence des passages enregistrés par Géovélo")
+
+# On part d'un dataframe contenant une adresse
+focus_centre <- data.frame(address = "Place René Bouhier, Nantes") %>%
+  geocode(address, method = "osm") %>% # on retrouve sa localisation xy
+  select(long, lat) %>% # on ne garde que le xy
+  as.numeric() %>% # qu'on passe en format numérique attendu par st_point
+  st_point() %>% # On le spécifie en point
+  st_sfc(crs = "EPSG:4326") # on crée une géométrie en précisant que c'est du WSG84
+
+# On crée une boîte de 500m 
+focus <- focus_centre %>% # On repart du centre
+  st_buffer(dist = 250) %>% # On crée un cercle de 250m de rayon
+  st_make_grid(n = 1) # On crée un carré qui l'entoure
+
+tmap_mode("view")
+tm_shape(focus) + 
+  tm_polygons()
+
+```
+
