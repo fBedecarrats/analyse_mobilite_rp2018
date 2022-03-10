@@ -66,6 +66,75 @@ tm_shape(inv_focus_b10) +
 tm_shape(inv_focus) + 
   tm_lines()
 
+
+
+```
+
+
+
+```{r}
+# Essai de Voronoï sur des lignes
+inv_focus_id <- inv_focus %>%
+  mutate(my_ID = as.character(seq_len(nrow(.)))) %>% 
+  st_set_agr("constant")
+
+inv_focus_p <- inv_focus %>%
+  st_cast("POINT") %>%
+  filter(!duplicated(geometry)) %>% 
+  group_by(my_ID) %>% 
+  summarise()
+
+voronoi_points_s <- inv_focus_p %>%
+  st_voronoi(do.call("c", st_geometry(.))) %>% 
+  st_collection_extract() %>% 
+  st_set_crs(27572)
+
+voronoi_lines_s <- voronoi_points_s %>%
+  st_cast("MULTIPOLYGON", ids = unlist(st_intersects(.,inv_focus_p))) %>% 
+  st_union(by_feature = TRUE)
+  
+inv_focus_b10_nooverlap <- inv_focus_b10 %>%
+  st_geometry() %>%
+  st_intersection(voronoi_lines_s)
+
+my_solution <- map2(
+  .x = st_geometry(st_buffer(inv_focus_id, dist = 10)), 
+  .y = voronoi_lines_s, 
+  .f = st_intersection
+  ) %>% 
+  st_sfc()
+
+str(example_points)
+vor <- inv_focus %>%
+  st_cast("POINT") %>%
+  st_union() %>%
+  filter(!duplicated(geometry)) %>%
+  st_voronoi() %>%
+  st_collection_extract(., "POLYGON") %>%
+  st_as_sf()
+
+```
+
+
+
+
+
+
+
+
+```{r}
+# Carte complète : très long à générer
+tm_shape(freq_axes_2021) + 
+  tm_lines(col = "frequency",
+    palette = "YlOrRd",
+    style = "fisher", 
+    n = 20,
+    title.col = "Fréquence des passages enregistrés par Géovélo")
+```
+
+```{r}
+# Archives
+
 inv_focus_p <- rnet_get_nodes(inv_focus)
 
 vor <- inv_focus %>%
@@ -104,39 +173,5 @@ tm_shape(vor2) +
 
 
 amenag_focus_seg <- 
-
-```
-
-
-
-```{r}
-# Essai de Voronoï sur des lignes
-inv_focus_p <- rnet_get_nodes(inv_focus)
-
-vor <- inv_focus %>%
-  st_cast("POINT") %>%
-  st_union() %>%
-  filter(!duplicated(geometry)) %>%
-  st_voronoi() %>%
-  st_collection_extract(., "POLYGON") %>%
-  st_as_sf()
-
-```
-
-
-
-
-
-
-
-
-```{r}
-# Carte complète : très long à générer
-tm_shape(freq_axes_2021) + 
-  tm_lines(col = "frequency",
-    palette = "YlOrRd",
-    style = "fisher", 
-    n = 20,
-    title.col = "Fréquence des passages enregistrés par Géovélo")
 ```
 
