@@ -18,6 +18,8 @@ library(tmap)
 library(tidygeocoder)
 library(purrr)
 library(stplanr)
+remotes::install_github("statnmap/cartomisc")
+library(cartomisc) # Pour des buffers sans superposition
 
 freq_file <- "data/stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson"
 amenag_file <- "data/nantes-metropole-2022-02-26-2022-02-26.geojson"
@@ -57,7 +59,11 @@ amenag_focus <- st_intersection(amenagements, focus)
 freq_focus <- st_intersection(freq_axes_2021, focus)
 inv_focus <- nm_inv %>%
   st_intersection(focus)
+```
 
+# Définition des zones d'influence des aménagements
+
+```{r}
 amenag_focus_buff10 <- st_buffer(amenag_focus, 10)
 inv_focus_b10 <- st_buffer(inv_focus, 10)
 
@@ -70,113 +76,60 @@ tm_shape(inv_focus) +
   tm_lines() # + 
 # tm_shape(freq_focus) + 
 #   tm_lines()
-
-
-
 ```
 
 
 
 ```{r}
-# Essai de Voronoï sur des lignes
-inv_focus_id <- inv_focus %>%
-  mutate(my_ID = as.character(seq_len(nrow(.)))) %>% 
-  st_set_agr("constant")
+# La fonction regional_seas a été créée pour calculer des aires
+# autour de formes. Conçue pour des buffers d'aires marines autour de régions
+# (d'où le nom), elle fonctionne aussi pour des lignes
+inv_focus_b10_nooverlap <- inv_focus %>%
+  regional_seas(group = "gid",
+  dist = units::set_units(10, m), # buffer distance
+  density = units::set_units(1, m)) # density of points
 
-inv_focus_p <- inv_focus %>%
-  st_cast("POINT") %>%
-  filter(!duplicated(geometry)) %>% 
-  group_by(my_ID) %>% 
-  summarise()
-
-voronoi_points_s <- inv_focus_p %>%
-  st_voronoi(do.call("c", st_geometry(.))) %>% 
-  st_collection_extract() %>% 
-  st_set_crs(27572)
-
-voronoi_lines_s <- voronoi_points_s %>%
-  st_cast("MULTIPOLYGON", ids = unlist(st_intersects(.,inv_focus_p))) %>% 
-  st_union(by_feature = TRUE)
-  
-inv_focus_b10_nooverlap <- inv_focus_b10 %>%
-  st_geometry() %>%
-  st_intersection(voronoi_lines_s)
-
-my_solution <- map2(
-  .x = st_geometry(st_buffer(inv_focus_id, dist = 10)), 
-  .y = voronoi_lines_s, 
-  .f = st_intersection
-  ) %>% 
-  st_sfc()
-
-str(example_points)
-vor <- inv_focus %>%
-  st_cast("POINT") %>%
-  st_union() %>%
-  filter(!duplicated(geometry)) %>%
-  st_voronoi() %>%
-  st_collection_extract(., "POLYGON") %>%
-  st_as_sf()
-
-```
-
-
-
-
-
-
-
-
-```{r}
-# Carte complète : très long à générer
-tm_shape(freq_axes_2021) + 
-  tm_lines(col = "frequency",
-    palette = "YlOrRd",
-    style = "fisher", 
-    n = 20,
-    title.col = "Fréquence des passages enregistrés par Géovélo")
-```
-
-```{r}
-# Archives
-
-inv_focus_p <- rnet_get_nodes(inv_focus)
-
-vor <- inv_focus %>%
-  rnet_get_nodes() %>%
-  st_union() %>%
-  st_voronoi() %>%
-  st_collection_extract(., "POLYGON") %>%
-  st_as_sf()
- 
-
-
-inv_focus2 <- inv_focus %>%
-  line_breakup(vor)
-
-l_split <- function(l) {
-  lwgeom::st_split(l, vor)
-  }
-
-test <- inv_focus %>%
-  map(l_split)
-
-vor2 <- inv_focus2 %>%
-  rnet_get_nodes() %>%
-  st_union() %>%
-  st_voronoi() %>%
-  st_collection_extract(., "POLYGON") %>%
-  st_as_sf()
-
-
-tm_shape(inv_focus_b10) + 
+# On visualise le résultat
+tm_shape(inv_focus_b10_nooverlap) + 
   tm_polygons(col = "green", alpha = 0.2) +
 tm_shape(inv_focus) + 
-  tm_lines() +
-tm_shape(vor2) + 
-  tm_borders()
+  tm_lines() 
+
+buffer_distances <- c(5, 10, 15, 20)
+
+for (i in 1:length(buffer_distances)) {
+  output_filename <- paste0("inv_amenagts_buff_", 
+                            buffer_distances[i], 
+                            "m_ss_superposision.shp")
+  if (!file.exists(output_filename)) {
+    time_start <- Sys.time()
+    # On applique donc à l'ensemble des aménagements
+    buffered_no_overlap <- nm_inv %>%
+      regional_seas(group = "gid",
+                    dist = units::set_units(buffer_distances[i], m), # buffer distance
+                    density = units::set_units(1, m)) # density of points
+    time_end <- Sys.time()
+    duration_voro_buffer <- time_end - time_start
+    st_write(buffered_no_overlap, output_filename)
+    print(output_filename)
+    print(duration_voro_buffer)
+  }
+}
+
+time_start <- Sys.time()
+# On applique donc à l'ensemble des aménagements
+inv_b10_no_overlap <- nm_inv %>%
+  regional_seas(group = "gid",
+  dist = units::set_units(10, m), # buffer distance
+  density = units::set_units(1, m)) # density of points
+time_end <- Sys.time()
+duration_voro_buffer <- time_end - time_start
+duration_voro_buffer
+
+# > duration_voro_buffer
+# Time difference of 4.925289 hours
 
 
-amenag_focus_seg <- 
 ```
+
 
