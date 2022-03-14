@@ -29,8 +29,8 @@ chown -R rstudio:users $DOC_DIR
 # wget https://www.insee.fr/fr/statistiques/fichier/5395749/contenu_RP2018_mobpro.pdf
 
 # copy files from S3 
-mc cp s3/fbedecarrats/diffusion/mobilites/Recensement/{FD_MOBPRO_2018.csv,commune2021.csv,Intercommunalite_Metropole_au_01-01-2018.xls,Varmod_MOBPRO_2018.csv} $DATA_DIR
-mc cp s3/fbedecarrats/diffusion/mobilites/Geovelo/{stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson,nantes-metropole-2022-02-26-2022-02-26.geojson,amenagements-cyclables-nantes-metropole-enrichis.geojson} $DATA_DIR
+mc cp s3/fbedecarrats/diffusion/mobilites/Recensement/* $DATA_DIR
+mc cp s3/fbedecarrats/diffusion/mobilites/Geovelo/* $DATA_DIR
 mc cp s3/fbedecarrats/diffusion/contenu_RP2018_mobpro.pdf $DOC_DIR
 
 # launch RStudio in the right project
