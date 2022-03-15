@@ -29,9 +29,9 @@ chown -R rstudio:users $DOC_DIR
 # wget https://www.insee.fr/fr/statistiques/fichier/5395749/contenu_RP2018_mobpro.pdf
 
 # copy files from S3 
-mc cp "s3/fbedecarrats/diffusion/mobilites/Recensement/"* "$DATA_DIR/"
-mc cp "s3/fbedecarrats/diffusion/mobilites/Geovelo/"* "$DATA_DIR/"
-mc cp "s3/fbedecarrats/diffusion/mobilites/Documentation/"* "$DOC_DIR/"
+mc cp s3/fbedecarrats/diffusion/mobilites/Recensement/* $DATA_DIR
+mc cp s3/fbedecarrats/diffusion/mobilites/Geovelo/* $DATA_DIR
+mc cp s3/fbedecarrats/diffusion/mobilites/Documentation/* $DOC_DIR
 
 # launch RStudio in the right project
 # Copied from InseeLab UtilitR
