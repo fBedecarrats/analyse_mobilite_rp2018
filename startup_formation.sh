@@ -9,7 +9,7 @@ git clone $REPO_URL $WORK_DIR
 chown -R rstudio:users $WORK_DIR
 
 # copy files from S3 
-mc cp s3/fbedecarrats/diffusion/mobilites/data $WORK_DIR
+mc cp -r s3/fbedecarrats/diffusion/mobilites/data $WORK_DIR
 
 # launch RStudio in the right project
 # Copied from InseeLab UtilitR
