@@ -21,15 +21,19 @@ library(stplanr)
 remotes::install_github("statnmap/cartomisc")
 library(cartomisc) # Pour des buffers sans superposition
 
-freq_file <- "data/stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson"
-amenag_file <- "data/nantes-metropole-2022-02-26-2022-02-26.geojson"
-nm_inv_file <- "data/amenagements-cyclables-nantes-metropole-enrichis.geojson"
+loc_geovelo <- "data/Geovelo/"
+freq_file <- "stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson"
+amenag_file <- "nantes-metropole-2022-02-26-2022-02-26.geojson"
+nm_inv_file <- "amenagements-cyclables-nantes-metropole-enrichis.geojson"
 
-freq_axes_2021 <- read_sf(freq_file ) %>%
+freq_axes_2021 <- paste0(loc_geovelo, freq_file) %>%
+  read_sf() %>%
   st_transform(crs = "EPSG:27572") # on la passe en Lambert 2
-amenagements <- read_sf(amenag_file) %>%
+amenagements <- paste0(loc_geovelo, amenag_file) %>%
+  read_sf() %>%
   st_transform(crs = "EPSG:27572") # on la passe en Lambert 2
-nm_inv <- read_sf(nm_inv_file) %>%
+nm_inv <- paste0(loc_geovelo, nm_inv_file) %>%
+  read_sf() %>%
   st_transform(crs = "EPSG:27572") # on la passe en Lambert 2
 
 # Ajouter cartes générales
@@ -84,24 +88,15 @@ tm_shape(inv_focus) +
 # La fonction regional_seas a été créée pour calculer des aires
 # autour de formes. Conçue pour des buffers d'aires marines autour de régions
 # (d'où le nom), elle fonctionne aussi pour des lignes
-inv_focus_b10_nooverlap <- inv_focus %>%
-  regional_seas(group = "gid",
-  dist = units::set_units(10, m), # buffer distance
-  density = units::set_units(1, m)) # density of points
-
-# On visualise le résultat
-tm_shape(inv_focus_b10_nooverlap) + 
-  tm_polygons(col = "green", alpha = 0.2) +
-tm_shape(inv_focus) + 
-  tm_lines() 
-
 buffer_distances <- c(5, 10, 15, 20)
 
 for (i in 1:length(buffer_distances)) {
   output_filename <- paste0("inv_amenagts_buff_", 
                             buffer_distances[i], 
-                            "m_ss_superposision.shp")
-  if (!file.exists(output_filename)) {
+                            "m_ss_superposision")
+  output_path <- paste0(loc_geovelo, output_filename)
+  
+  if (!file.exists(paste0(output_path, ".zip"))) {
     time_start <- Sys.time()
     # On applique donc à l'ensemble des aménagements
     buffered_no_overlap <- nm_inv %>%
@@ -110,25 +105,18 @@ for (i in 1:length(buffer_distances)) {
                     density = units::set_units(1, m)) # density of points
     time_end <- Sys.time()
     duration_voro_buffer <- time_end - time_start
-    st_write(buffered_no_overlap, output_filename)
+    st_write(buffered_no_overlap, paste0(output_path, ".shp"))
     print(output_filename)
     print(duration_voro_buffer)
+    # Les temps de traitements prennent entre 3 et 8h par jeu de données
+    rm(buffered_no_overlap)
+  } else {
+    unzip(paste0(output_path, ".zip"), exdir = "temp")
+    temp <- st_read(paste0("temp/", output_filename, ".shp"))
+    assign(paste0("inv_buff_", buffer_distances[i], "m"), temp)
+    rm(temp)
   }
 }
-
-time_start <- Sys.time()
-# On applique donc à l'ensemble des aménagements
-inv_b10_no_overlap <- nm_inv %>%
-  regional_seas(group = "gid",
-  dist = units::set_units(10, m), # buffer distance
-  density = units::set_units(1, m)) # density of points
-time_end <- Sys.time()
-duration_voro_buffer <- time_end - time_start
-duration_voro_buffer
-
-# > duration_voro_buffer
-# Time difference of 4.925289 hours
-
 
 ```
 

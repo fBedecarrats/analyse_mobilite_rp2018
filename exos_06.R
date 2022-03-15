@@ -16,7 +16,7 @@ library(tmap) # pour les cartes
 # Chargement des données --------------------------------------------------
 
 # On utilise vroom qui est ~10x plus rapide pour lire de gros fichiers
-flux <- vroom("data/FD_MOBPRO_2018.csv",
+flux <- vroom("data/Recensement/FD_MOBPRO_2018.csv",
                col_types = cols_only( # on ne charge que certaines colonnes
                  COMMUNE = "character", # commune de résidence
                  DCLT = "factor", # commune de travail
@@ -24,7 +24,7 @@ flux <- vroom("data/FD_MOBPRO_2018.csv",
                  TRANS = "factor")) # mode de transport
 
 # On reprend la base des communes/epci pour l'année correspondante
-EPCI_FR <- read_excel("data/Intercommunalite_Metropole_au_01-01-2018.xls", 
+EPCI_FR <- read_excel("data/Recensement/Intercommunalite_Metropole_au_01-01-2018.xls", 
                       sheet = "Composition_communale", skip = 5)
 
 # Filtre sur l'EPCI -------------------------------------------------------
