@@ -8,7 +8,7 @@ library(forcats)
 library(vroom)
 
 # On charge la liste des communes ici plutôt que dans
-EPCI_FR <- read_excel("data/Intercommunalite_Metropole_au_01-01-2018.xls", 
+EPCI_FR <- read_excel("data/Recensement/Intercommunalite_Metropole_au_01-01-2018.xls", 
                       sheet = "Composition_communale", skip = 5) %>%
   select(LIBEPCI, CODGEO, LIBGEO)
 
@@ -36,7 +36,7 @@ ui <- navbarPage(title = "Trajets domicile-travail (Recensement 2018)",
 server <- function(input, output) {
   # Chargement des données
   # On utilise vroom qui est ~10x plus rapide pour lire de gros fichiers
-  flux <- vroom("data/FD_MOBPRO_2018.csv",
+  flux <- vroom("data/Recensement/FD_MOBPRO_2018.csv",
                 col_types = cols_only(
                   COMMUNE = "character",
                   DCLT = "character",
