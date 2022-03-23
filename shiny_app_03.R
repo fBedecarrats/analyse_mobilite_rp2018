@@ -41,8 +41,9 @@ ui <- fluidPage(
     mainPanel(
       tabsetPanel(
         tabPanel("Matrice origine/destination", 
-                 girafeOutput("matrice_od_commune_mode",
-                              width = "100%", height = "80%")),
+                 textOutput("click_data"),
+                 plotOutput("matrice_od_commune_mode", height = "650px",
+                              click = "plot_click")),
         tabPanel("Carte des flux"),
         tabPanel("Histogramme")
       )
@@ -79,9 +80,8 @@ server <- function(input, output) {
       select(CODGEO, LIBGEO)
   }
   
-  # Cet objet est "réactif" : il va créer un rendu qui se mettra à jour
-  # dès qu'un élément qui le compose est modifié.
-  output$matrice_od_commune_mode <- renderGirafe({
+  # On crée une variable réactive avec la matrice origine-destination sélectionnée
+  matrice_od_epci <- reactive({
     # On récupère l'EPCI sélectionnée dans l'UI
     my_epci = input$epci
     # my_epci = "Nantes Métropole"
@@ -113,9 +113,6 @@ server <- function(input, output) {
                                              levels = ordre_communes),
              `Commune de travail` = factor(`Commune de travail`,
                                            levels = ordre_communes)) 
-    
-    
-    
     intermediaire_total <- flux_epci %>% # on enlève le mode du group_by
       group_by(`Commune de résidence`, `Commune de travail`) %>%
       summarise(`Flux total par paire de communes` = sum(IPONDI, na.rm = TRUE))
@@ -132,30 +129,15 @@ server <- function(input, output) {
                          round(part_mod * 100, 1), "%\nTrajets :", 
                          round(`Flux domicile-travail`), "/", 
                          round(`Flux total par paire de communes`)))
-    
-    ## Avec ggigraph
-      dynamic_plot <- intermediaire %>% # marche aussi en partant de flux_epci, mais + long
-        ggplot() +
-        geom_bar_interactive(aes(x = "", fill = `Mode de transport`,
-                                 tooltip = txt, data_id = txt), position = "fill",
-                             size = 1) + # Pour afficher les résultats en proportion
-        facet_grid(`Commune de résidence` ~ `Commune de travail`, # affichage en carreaux
-                   switch = "y") + # labels en ligne à gauche plutôt qu'à droite
-        theme(axis.text = element_blank(), # pas de texte d'échelle
-              axis.ticks = element_blank(), # pas de tirets de repères
-              strip.text.y.left = element_text(angle = 0), # orientation des noms de communes en ligne
-              strip.text.x = element_text(angle = 90), # orientation des noms de communes en colonnes
-              panel.spacing = unit(0.2, "lines"),
-              axis.title = element_blank(),
-              panel.background = element_rect(fill = "white"),
-              legend.position = "top") +
-        guides(fill = guide_legend(nrow = 1))
-      girafe(ggobj = dynamic_plot, height_svg = 10, width_svg = 12,
-             options = list(opts_selection(type = "single"),
-                            opts_sizing(rescale = TRUE)))
+    return(intermediaire)
+  })
+  
+  # Cet objet est "réactif" : il va créer un rendu qui se mettra à jour
+  # dès qu'un élément qui le compose est modifié.
+  output$matrice_od_commune_mode <- renderPlot({
       
       ## Avec ggigraph
-      static_plot <- intermediaire %>% # marche aussi en partant de flux_epci, mais + long
+      static_plot <- matrice_od_epci() %>% # marche aussi en partant de flux_epci, mais + long
         ggplot() +
         geom_bar_interactive(aes(x = "", fill = `Mode de transport`,
                                  tooltip = txt, data_id = txt), position = "fill",
@@ -171,11 +153,14 @@ server <- function(input, output) {
               panel.background = element_rect(fill = "white"),
               legend.position = "top") +
         guides(fill = guide_legend(nrow = 1))
-      girafe(ggobj = dynamic_plot, height_svg = 10, width_svg = 12,
-             options = list(opts_selection(type = "single"),
-                            opts_sizing(rescale = TRUE)))
-      
+      static_plot
 
+  })
+  
+  output$click_data <- renderText({
+    req(input$plot_click)
+    nearPoints(matrice_od_epci(), input$plot_click) %>%
+      pull(txt)
   })
   
 }
