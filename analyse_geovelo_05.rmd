@@ -58,7 +58,7 @@ nm_inv <- paste0(loc_geovelo, nm_inv_file) %>%
 
 # Zoom
 
-On crée une routine permettant de focaliser sur une zone spécifique afin de visualiser les aménagements cyclables (en vert) et les traces Géovélo (en orange) à une échelle où peut visuellement en vérifier la cohérence. 
+On crée une routine permettant de focaliser sur une zone spécifique afin de visualiser les aménagements cyclables (en vert) et les fréquentations d'itinéraires relevées par Géovélo (en orange) à une échelle où peut visuellement en vérifier la cohérence. 
 
 ```{r}
 # On part d'un dataframe contenant une adresse
@@ -96,7 +96,7 @@ On observe ici qu'il y a un décalage entre la localisation des aménagements et
 
 # Définition des zones d'influence des aménagements
 
-Pour attribuer les traces Géovélo aux aménagements, on constitue des zones tampon autour de ces derniers et on considère que les traces qui traversent ces zones tampons transitent par l'aménagement.
+Pour attribuer aux aménagements les fréquentations itinéraires relevées par Géovélo, on constitue des zones tampon autour de des aménagements et on considère que les itinéraires Géovélo qui traversent ces zones tampons transitent par l'aménagement.
 
 Un pemier essai avec de constitution de tampons "simples" avec une distance de 10 mètres.
 
@@ -119,7 +119,7 @@ tm_shape(inv_focus) +
 #   tm_lines()
 ```
 
-On constate que ces tampons se superposent. Cela entraîne des difficultés d'assignation des traces qui se situeraient sur une aire de superposition entre deux zones tampon : à quel aménagements les assigner dans ces cas ? Par défaut, elles seraient comptabilisées deux fois. Cette situation serait particulièrement problématiques aux carrefours, où les traces seraient comptabilisées un grand nombre de fois. 
+On constate que ces tampons se superposent. Cela entraîne des difficultés d'assignation des itinéraires Géovélo qui se situeraient sur une aire de superposition entre deux zones tampon d'aménagements différents : à quel aménagements les assigner dans ces cas ? Par défaut, elles seraient comptabilisées deux fois. Cette situation serait particulièrement problématiques aux carrefours, où les traces seraient comptabilisées un grand nombre de fois. 
 
 On définit donc une méthode permettant de générer des tampons qui ne se superposent pas. Elle s'appuient sur la constitution de diagrammes de Voronoï. Cette procédure est très gourmande/chronophage en termes de calcul, car les diagrammes de Voronoï prennent comme référence des points et pas des lignes. Ici on doit décomposer chaque ligne en une série de points rapprochés, pour ensuite fusionner les polygonnes du diagramme de Voronoï appartenant à une même ligne. 
 
@@ -168,7 +168,7 @@ inv_buff_10m_focus <- inv_buff_10m %>%
 tm_shape(inv_buff_10m_focus) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
 tm_shape(inv_focus) + 
-  tm_lines(col = "darkgreen", legend.show = TRUE) 
+  tm_lines(col = "darkgreen", legend.show = TRUE) + 
 tm_shape(focus) + 
   tm_borders()
 
@@ -197,10 +197,39 @@ tm_shape(focus) +
 
 La procédure d'appariement entre les traces Géovélo et les aménagements peut être réalisée de la sorte :  
 
-1. resegmentation des traces Géovélo pour que les segments se situent soit en dehors, soit dans les zones tampons ;
-2. association à chaque trace Géovélo de l'identifiant de la zone tampon dans laquel elle se situe ;
-3. Pour chaque identifiant de zone tampon, 
-3. report des statistiques de passages réalisés en 2. vers les aménagements.
+1. resegmentation des itinéraires Géovélo pour que les segments se situent dans les zones tampons d'aménagement et report de l'identifiant de l'aménagement correspondant dans les attributs du segment de l'itinéraire Géovélo  ;
+2. Pour chaque segment Géovélo associé à une zone tampon, multiplier la fréquentation de l'itinéraire par la longueur de la trace ;
+3. report des statistiques de passages réalisés en 2. vers les tampons puis les aménagements associés ;
+4. Pour chaque aménagement, diviser le produit calculé à l'étape 2. par la longueur de l'aménagement associé.
+
+
+```{r}
+
+freq_focus_in <- st_intersection(freq_focus, inv_buff_10m_focus)
+
+freq_inv_buff_10m_focus <- freq_focus %>%
+  st_intersection(inv_buff_10m_focus) %>%
+  mutate(geovelo_paths_length = st_length(.),
+         geovelo_frequency_factor = frequency * geovelo_paths_length) %>%
+  group_by(gid) %>%
+  summarize(paths_sum_frequency = sum(geovelo_frequency_factor, na.rm = TRUE)) %>%
+  st_drop_geometry()
+
+freq_inv_focus <- inv_focus %>%
+  left_join(freq_inv_buff_10m_focus, by = "gid") %>%
+  mutate(facility_length = st_length(.),
+         facility_frequency = paths_sum_frequency / facility_length)
+           
+
+tm_shape(inv_buff_10m_focus) + 
+  tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
+tm_shape(inv_focus) + 
+  tm_lines(col = "darkgreen", legend.show = TRUE) +
+tm_shape(freq_focus_in) + 
+  tm_lines(col = "orange") +
+tm_shape(focus) + 
+  tm_borders()
+```
 
 
 # Traitement des passages hors zones aménagées
