@@ -10,9 +10,22 @@ output:
 editor_options: 
   chunk_output_type: console
 ---
+
+
 ```{r setup, include=FALSE} 
 # Ce bloc définit des options d'affichage pour l'ensemble du document
 knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+# Installation des librairies
+library(tidyverse)
+library(sf)
+library(tmap)
+library(tidygeocoder)
+library(purrr)
+library(stplanr)
+remotes::install_github("statnmap/cartomisc")
+library(cartomisc) # Pour des buffers sans superposition
+library(sfnetworks)
 ```
 
 
@@ -87,6 +100,7 @@ Pour attribuer les traces Géovélo aux aménagements, on constitue des zones ta
 
 Un pemier essai avec de constitution de tampons "simples" avec une distance de 10 mètres.
 
+### Zones tampons "simples"
 ```{r}
 amenag_focus_buff10 <- st_buffer(amenag_focus, 10)
 inv_focus_b10 <- st_buffer(inv_focus, 10)
@@ -95,10 +109,12 @@ inv_focus_b10 <- st_buffer(inv_focus, 10)
 # TODO : mettre en forme pour ajouter la fréquentation Géovélo
 
 tm_shape(inv_focus_b10) + 
-  tm_polygons(col = "green", alpha = 0.1) +
+  tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
 tm_shape(inv_focus) + 
-  tm_lines(col = "darkgreen") +
-  tm_view(view.legend.position = "right")
+  tm_lines(col = "darkgreen", legend.show = TRUE) +
+  tm_shape(focus) + 
+  tm_borders()
+
 # tm_shape(freq_focus) + 
 #   tm_lines()
 ```
@@ -114,6 +130,7 @@ Pour éviter de re-générer ces zones tampons sans recoupement à chaque fois, 
 # autour de formes. Conçue pour des buffers d'aires marines autour de régions
 # (d'où le nom), elle fonctionne aussi pour des lignes
 buffer_distances <- c(5, 10, 15, 20)
+
 
 for (i in 1:length(buffer_distances)) {
   output_filename <- paste0("inv_amenagts_buff_", 
@@ -137,14 +154,60 @@ for (i in 1:length(buffer_distances)) {
     rm(buffered_no_overlap)
   } else {
     unzip(paste0(output_path, ".zip"), exdir = "temp")
-    temp <- st_read(paste0("temp/", output_filename, ".shp"))
+    temp <- st_read(paste0("temp/", output_filename, ".shp"),
+                    quiet = TRUE)
+    st_crs(temp) <- "EPSG:27572"
     assign(paste0("inv_buff_", buffer_distances[i], "m"), temp)
     rm(temp)
   }
 }
 
+inv_buff_10m_focus <- inv_buff_10m %>%
+  st_intersection(focus)
 
+tm_shape(inv_buff_10m_focus) + 
+  tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
+tm_shape(inv_focus) + 
+  tm_lines(col = "darkgreen", legend.show = TRUE) 
+tm_shape(focus) + 
+  tm_borders()
 
 ```
 
+On a bien maintenant des polygones qui ne se recoupent pas et à l'intérieur desquels on va pouvoir affecter les traces Géovélo.
+
+# Affectation des traces Géovélo aux aménagements.
+
+On s'appuie donc maintenant sur les zones tamon non superposées pour affecter les traces Géovélo.
+- Le filaire d'aménagements, qui contiennent une donnée riche sur ces derniers : identifiant et type d'aménagement ; 
+- Les zones tampons autour des aménagements, qui gardent un identifiant commun avec l'aménagement à partir duquel elles ont été générés ;
+- Les traces Géovélo, qui contiennent une statistique de passage.
+On visualise d'abord les traces géographiques disponibles.
+
+```{r}
+tm_shape(inv_buff_10m_focus) + 
+  tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
+tm_shape(inv_focus) + 
+  tm_lines(col = "darkgreen", legend.show = TRUE) +
+tm_shape(freq_focus) + 
+  tm_lines(col = "orange") +
+tm_shape(focus) + 
+  tm_borders()
+```
+
+La procédure d'appariement entre les traces Géovélo et les aménagements peut être réalisée de la sorte :  
+
+1. resegmentation des traces Géovélo pour que les segments se situent soit en dehors, soit dans les zones tampons ;
+2. association à chaque trace Géovélo de l'identifiant de la zone tampon dans laquel elle se situe ;
+3. Pour chaque identifiant de zone tampon, 
+3. report des statistiques de passages réalisés en 2. vers les aménagements.
+
+
+# Traitement des passages hors zones aménagées
+
+```{r}
+
+
+
+```
 
