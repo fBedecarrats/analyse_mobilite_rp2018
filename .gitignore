@@ -2,6 +2,11 @@
 .Rhistory
 .RData
 .Ruserdata
+*.html
+*.shp
+*.prj
+*.shx
+*.dbf
 data
 data/.*
 temp

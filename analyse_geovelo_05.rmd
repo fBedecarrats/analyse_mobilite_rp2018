@@ -145,6 +145,12 @@ for (i in 1:length(buffer_distances)) {
       regional_seas(group = "gid",
                     dist = units::set_units(buffer_distances[i], m), # buffer distance
                     density = units::set_units(1, m)) # density of points
+    # On a utilisé une méthode toute prête (regional_seas), développé pour 
+    # l'analyse des eaux territoriales, qui s'appuie sur st_buffer. 
+    # Pour lefaire mieux, il faudrait reprendre le code source de regional_seas
+    # et ajouter un paramètre pour la variale endCapStyle de st_buffer, afin 
+    # afin de pouvoir lui passer un paramètre FLAT.
+    
     time_end <- Sys.time()
     duration_voro_buffer <- time_end - time_start
     st_write(buffered_no_overlap, paste0(output_path, ".shp"))
@@ -199,44 +205,91 @@ La procédure d'appariement entre les traces Géovélo et les aménagements peut
 
 1. resegmentation des itinéraires Géovélo pour que les segments se situent dans les zones tampons d'aménagement et report de l'identifiant de l'aménagement correspondant dans les attributs du segment de l'itinéraire Géovélo  ;
 2. Pour chaque segment Géovélo associé à une zone tampon, multiplier la fréquentation de l'itinéraire par la longueur de la trace ;
-3. report des statistiques de passages réalisés en 2. vers les tampons puis les aménagements associés ;
-4. Pour chaque aménagement, diviser le produit calculé à l'étape 2. par la longueur de l'aménagement associé.
+3. Somme des facteurs réalisés en 2. des itinéraires vers les zones tampon ; 
+4. Report des sommes réalisées en 3. vers les aménagements associés ;
+5. Pour chaque aménagement, diviser le produit calculé à l'étape 2. et sommé à l'étape 3 par la longueur de l'aménagement associé.
 
 
 ```{r}
-
-freq_focus_in <- st_intersection(freq_focus, inv_buff_10m_focus)
-
+# Etapes 1 à 3
 freq_inv_buff_10m_focus <- freq_focus %>%
-  st_intersection(inv_buff_10m_focus) %>%
-  mutate(geovelo_paths_length = st_length(.),
+  st_intersection(inv_buff_10m_focus) %>% # Etape 1
+  mutate(geovelo_paths_length = st_length(.), # Etape 2
          geovelo_frequency_factor = frequency * geovelo_paths_length) %>%
-  group_by(gid) %>%
+  group_by(gid) %>% # Etape 3
   summarize(paths_sum_frequency = sum(geovelo_frequency_factor, na.rm = TRUE)) %>%
   st_drop_geometry()
 
-freq_inv_focus <- inv_focus %>%
-  left_join(freq_inv_buff_10m_focus, by = "gid") %>%
+# Etapes 4 et 5
+freq_inv_focus <- inv_focus %>% 
+  left_join(freq_inv_buff_10m_focus, by = "gid") %>% # Etape 4
   mutate(facility_length = st_length(.),
-         facility_frequency = paths_sum_frequency / facility_length)
-           
+         facility_frequency = paths_sum_frequency / facility_length) # Etape 5
+       
 
 tm_shape(inv_buff_10m_focus) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
-tm_shape(inv_focus) + 
-  tm_lines(col = "darkgreen", legend.show = TRUE) +
-tm_shape(freq_focus_in) + 
+tm_shape(freq_inv_focus) + 
   tm_lines(col = "orange") +
 tm_shape(focus) + 
   tm_borders()
 ```
 
+Les tests visuels sur la carte interactive ci-dessus semble cohérents. On applique la procédure à l'ensemble des traces et aménagements.
 
-# Traitement des passages hors zones aménagées
+```{r eval=FALSE}
+# On a segmenté pour faciliter le débuggage en cas d'erreur 
+# les étapes mettent plusieurs minutes à tourner sur le jeu complet
 
-```{r}
+# Etapes 1 à 3
+freq_inv_buff_10m_all_step1 <- freq_axes_2021 %>%
+  st_intersection(inv_buff_10m) 
+freq_inv_buff_10m_all_step2 <- freq_inv_buff_10m_all_step1 %>% # Etape 1
+  mutate(geovelo_paths_length = st_length(.), # Etape 2
+         geovelo_frequency_factor = frequency * geovelo_paths_length) 
+freq_inv_buff_10m_all_step3 <- freq_inv_buff_10m_all_step2 %>%
+  group_by(gid) %>% # Etape 3
+  summarize(paths_sum_frequency = sum(geovelo_frequency_factor, na.rm = TRUE)) 
+freq_inv_buff_10m_all_step3 <-  freq_inv_buff_10m_all_step3 %>%
+  st_drop_geometry()
 
+# Etapes 4 et 5
+freq_inv_all <- nm_inv %>% 
+  left_join(freq_inv_buff_10m_all_step3, by = "gid") %>% # Etape 4
+  mutate(facility_length = st_length(.),
+         facility_frequency = paths_sum_frequency / facility_length) # Etape 5
 
+freq_inv_all %>%
+  st_transform("EPSG:3947") %>%
+  select(-geo_point_2d) %>%
+  st_write("amenagements_cyclables_NM_freqs_Geovelo_essai_01.shp")
 
 ```
 
+Les données générées sont extraites sous forme de Shapefile, reprojeté en CC47.
+
+A améliorer à ce stade :
+
+- Les extrémité des zones tampons devraient êtres carrés et pas arrondies (facile à faire mais ça mettra du temps à tourner à nouveau avec les diagrammes de Voronoï). Cf. commentaire dans le code qui indique la méthode à suivre.
+- Tester la sensibilité aux tailles des zones tampons : 5m, 15m, 20m.
+- Analyser les données : statistiques de fréquentation par type d'aménagement.
+
+# Traitement des passages hors zones aménagées
+
+A ce stade on en reste à une procédure simple d'anti-jointure pour les traces qui sont en dehors.
+
+```{r eval=FALSE}
+freq_out <- st_difference(freq_axes_2021, inv_buff_10m)
+
+freq_out %>%
+  st_transform("EPSG:3947") %>%
+  select(-geo_point_2d) %>%
+  st_write("frequentations_Geovelo_hors_amenagement.shp")
+```
+
+Données générées sauvegardées en shapefile reprojeté en CC47.
+
+A améliorer sur ce volet : 
+
+- simplification des géométries (fusionner les itinéraires parallèles et proche) : a priori en utilisant le package sfnetworks.
+- représentation graphique : couleur et épaisseur des tracés pour indiquer leur importance, avec un filtre dynamique.
