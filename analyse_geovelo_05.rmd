@@ -22,10 +22,9 @@ library(sf)
 library(tmap)
 library(tidygeocoder)
 library(purrr)
-library(stplanr)
-remotes::install_github("statnmap/cartomisc")
+# library(stplanr)
 library(cartomisc) # Pour des buffers sans superposition
-library(sfnetworks)
+# library(sfnetworks)
 ```
 
 
@@ -126,9 +125,52 @@ On définit donc une méthode permettant de générer des tampons qui ne se supe
 Pour éviter de re-générer ces zones tampons sans recoupement à chaque fois, on enregistre les données issues du premier calcul, et on les recharge ensuite.
 
 ```{r}
-# La fonction regional_seas a été créée pour calculer des aires
-# autour de formes. Conçue pour des buffers d'aires marines autour de régions
-# (d'où le nom), elle fonctionne aussi pour des lignes
+# Cette fonction est adaptée de
+# https://github.com/statnmap/cartomisc/blob/master/R/regional_seas.R
+non_overlapping_buffers <- function(x, group, 
+                                    dist = units::set_units(1, m), 
+                                    density = units::set_units(1, m), 
+                                    endCapStyle = "ROUND") {
+
+  # Fusionne les objets autour desquels constituer les buffers
+  x_union <- x %>%
+    summarise()
+
+  # Create a doughnut for regional seas areas, 30km off coasts
+  x_donut <- x_union %>%
+    st_buffer(dist = dist, endCapStyle = endCapStyle) %>%
+    st_cast() 
+
+  # transform multi-lines as separate unique lines
+  x_lines <- x_union %>%
+    st_cast("LINESTRING")
+
+  # Then as regular points
+  x_points <- x_lines %>%
+    # Choose density according to precision needed
+    st_line_sample(density = density) %>%
+    st_sf()
+
+  # Create voronoi polygons around points
+  x_vd <- x_points %>%
+    st_combine() %>%
+    st_voronoi() %>%
+    st_cast() %>%
+    st_intersection(x_donut) %>%
+    st_cast() %>%
+    st_sf() %>%
+    mutate(id_v = 1:n()) %>%
+    st_join(x) %>%
+    distinct(id_v, .keep_all = TRUE)
+
+  x_no_buff <- x_vd %>%
+    group_by_at(group) %>%
+    summarise()
+  
+  return(x_no_buff)
+
+}
+
 buffer_distances <- c(5, 10, 15, 20)
 
 
@@ -142,9 +184,9 @@ for (i in 1:length(buffer_distances)) {
     time_start <- Sys.time()
     # On applique donc à l'ensemble des aménagements
     buffered_no_overlap <- nm_inv %>%
-      regional_seas(group = "gid",
-                    dist = units::set_units(buffer_distances[i], m), # buffer distance
-                    density = units::set_units(1, m)) # density of points
+      non_overlapping_buffers(group = "gid",
+                              dist = units::set_units(buffer_distances[i]), # buffer distance
+                              density = units::set_units(1)) # density of points
     # On a utilisé une méthode toute prête (regional_seas), développé pour 
     # l'analyse des eaux territoriales, qui s'appuie sur st_buffer. 
     # Pour lefaire mieux, il faudrait reprendre le code source de regional_seas
@@ -204,32 +246,43 @@ tm_shape(focus) +
 La procédure d'appariement entre les traces Géovélo et les aménagements peut être réalisée de la sorte :  
 
 1. resegmentation des itinéraires Géovélo pour que les segments se situent dans les zones tampons d'aménagement et report de l'identifiant de l'aménagement correspondant dans les attributs du segment de l'itinéraire Géovélo  ;
-2. Pour chaque segment Géovélo associé à une zone tampon, multiplier la fréquentation de l'itinéraire par la longueur de la trace ;
-3. Somme des facteurs réalisés en 2. des itinéraires vers les zones tampon ; 
+2. Pour chaque segment Géovélo associé à une zone tampon, calculer la longueur se situant dans la zone tampon de l'aménagement ;
+3. Pour chaque zone tampon on réalise la moyenne des fréquences de fréquentation des itinéraires Géovélo captés, en pondérant cette moyenne par la longueur des segments d'itinéraire capté (la pondération permet de limiter l'incidence des segments adjacents non équipés qui croisent la zone tampon de l'aménagement) ; 
 4. Report des sommes réalisées en 3. vers les aménagements associés ;
 5. Pour chaque aménagement, diviser le produit calculé à l'étape 2. et sommé à l'étape 3 par la longueur de l'aménagement associé.
 
 
 ```{r}
+inv_buff_10m_focus <- inv_focus %>%
+      non_overlapping_buffers(group = "gid", dist = 10, density = 1)
+
+stats_freq_buff <- function(freq_l, inv_buff_s) {
+  freq_inv_buff <- freq_l %>%
+    st_intersection(inv_buff_s) %>% # Etape 1
+    mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
+    rename(geovelo_frequency = frequency) %>%
+    group_by(gid) %>% # Etape 3
+    summarize(facility_frequency = weighted.mean(geovelo_frequency,
+                                                 geovelo_paths_length, 
+                                                 na.rm = TRUE))  %>%
+    st_drop_geometry()
+  
+}
+
 # Etapes 1 à 3
 freq_inv_buff_10m_focus <- freq_focus %>%
-  st_intersection(inv_buff_10m_focus) %>% # Etape 1
-  mutate(geovelo_paths_length = st_length(.), # Etape 2
-         geovelo_frequency_factor = frequency * geovelo_paths_length) %>%
-  group_by(gid) %>% # Etape 3
-  summarize(paths_sum_frequency = sum(geovelo_frequency_factor, na.rm = TRUE)) %>%
-  st_drop_geometry()
+  stats_freq_buff(inv_buff_10m_focus)
 
 # Etapes 4 et 5
 freq_inv_focus <- inv_focus %>% 
-  left_join(freq_inv_buff_10m_focus, by = "gid") %>% # Etape 4
-  mutate(facility_length = st_length(.),
-         facility_frequency = paths_sum_frequency / facility_length) # Etape 5
-       
+  left_join(freq_inv_buff_10m_focus, by = "gid")
 
+# Plot result
 tm_shape(inv_buff_10m_focus) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
 tm_shape(freq_inv_focus) + 
+  tm_lines(col = "darkgreen") +
+tm_shape(freq_focus) + 
   tm_lines(col = "orange") +
 tm_shape(focus) + 
   tm_borders()
@@ -241,23 +294,14 @@ Les tests visuels sur la carte interactive ci-dessus semble cohérents. On appli
 # On a segmenté pour faciliter le débuggage en cas d'erreur 
 # les étapes mettent plusieurs minutes à tourner sur le jeu complet
 
+
 # Etapes 1 à 3
-freq_inv_buff_10m_all_step1 <- freq_axes_2021 %>%
-  st_intersection(inv_buff_10m) 
-freq_inv_buff_10m_all_step2 <- freq_inv_buff_10m_all_step1 %>% # Etape 1
-  mutate(geovelo_paths_length = st_length(.), # Etape 2
-         geovelo_frequency_factor = frequency * geovelo_paths_length) 
-freq_inv_buff_10m_all_step3 <- freq_inv_buff_10m_all_step2 %>%
-  group_by(gid) %>% # Etape 3
-  summarize(paths_sum_frequency = sum(geovelo_frequency_factor, na.rm = TRUE)) 
-freq_inv_buff_10m_all_step3 <-  freq_inv_buff_10m_all_step3 %>%
-  st_drop_geometry()
+freq_inv_buff_10m_focus <- freq_axes_2021 %>%
+  stats_freq_buff(inv_buff_10m)
 
 # Etapes 4 et 5
 freq_inv_all <- nm_inv %>% 
-  left_join(freq_inv_buff_10m_all_step3, by = "gid") %>% # Etape 4
-  mutate(facility_length = st_length(.),
-         facility_frequency = paths_sum_frequency / facility_length) # Etape 5
+  left_join(freq_inv_buff_10m_focus, by = "gid")
 
 freq_inv_all %>%
   st_transform("EPSG:3947") %>%
@@ -269,9 +313,6 @@ freq_inv_all %>%
 Les données générées sont extraites sous forme de Shapefile, reprojeté en CC47.
 
 A améliorer à ce stade :
-
-- Les extrémité des zones tampons devraient êtres carrés et pas arrondies (facile à faire mais ça mettra du temps à tourner à nouveau avec les diagrammes de Voronoï). Cf. commentaire dans le code qui indique la méthode à suivre.
-- Tester la sensibilité aux tailles des zones tampons : 5m, 15m, 20m.
 - Analyser les données : statistiques de fréquentation par type d'aménagement.
 
 # Traitement des passages hors zones aménagées
