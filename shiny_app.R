@@ -24,7 +24,7 @@ ui <- fluidPage(
                   "Choisir une EPCI:",
                   choices = sort(unique(EPCI_FR$LIBEPCI)),
                   selected = "Nantes Métropole"),
-      checkboxGroupInput("deplacement",
+      checkboxGroupInput("deplacement", 
                          "Mode de déplacement",
                          c("Aucun" = "1",
                            "Marche" = "2",
@@ -40,10 +40,11 @@ ui <- fluidPage(
     
     mainPanel(
       tabsetPanel(
+        tabPanel("Carte des flux",
+                 textOutput("my_deplacement")),
         tabPanel("Matrice origine/destination", 
                  girafeOutput("matrice_od_commune_mode",
                               width = "100%", height = "80%")),
-        tabPanel("Carte des flux"),
         tabPanel("Histogramme")
       )
     )
@@ -52,6 +53,7 @@ ui <- fluidPage(
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+  output$my_deplacement <- renderText(paste(input$deplacement, collapse = ", "))
   # Chargement des données
   # On utilise vroom qui est ~10x plus rapide pour lire de gros fichiers
   flux <- vroom("data/Recensement/FD_MOBPRO_2018.csv",
@@ -79,9 +81,8 @@ server <- function(input, output) {
       select(CODGEO, LIBGEO)
   }
   
-  # Cet objet est "réactif" : il va créer un rendu qui se mettra à jour
-  # dès qu'un élément qui le compose est modifié.
-  output$matrice_od_commune_mode <- renderGirafe({
+  
+  flux_epci <- reactive({
     # On récupère l'EPCI sélectionnée dans l'UI
     my_epci = input$epci
     # my_epci = "Nantes Métropole"
@@ -113,16 +114,20 @@ server <- function(input, output) {
                                              levels = ordre_communes),
              `Commune de travail` = factor(`Commune de travail`,
                                            levels = ordre_communes)) 
+    return(flux_epci)
+  })
+  
+  # Cet objet est "réactif" : il va créer un rendu qui se mettra à jour
+  # dès qu'un élément qui le compose est modifié.
+  output$matrice_od_commune_mode <- renderGirafe({
     
-    
-    
-    intermediaire_total <- flux_epci %>% # on enlève le mode du group_by
+    intermediaire_total <- flux_epci() %>% # on enlève le mode du group_by
       group_by(`Commune de résidence`, `Commune de travail`) %>%
       summarise(`Flux total par paire de communes` = sum(IPONDI, na.rm = TRUE))
     
     # Cette étape est factultative mais fait gagner ~2secondes de traitement
     # car dplyr est un peu plus rapide que ggplot2
-    intermediaire <- flux_epci %>%
+    intermediaire <- flux_epci() %>%
       group_by(`Mode de transport`, `Commune de résidence`, `Commune de travail`) %>%
       summarise(`Flux domicile-travail` = sum(IPONDI, na.rm = TRUE)) %>%
       left_join(intermediaire_total, by = c("Commune de résidence", 
