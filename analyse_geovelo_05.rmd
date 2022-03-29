@@ -22,9 +22,6 @@ library(sf)
 library(tmap)
 library(tidygeocoder)
 library(purrr)
-# library(stplanr)
-library(cartomisc) # Pour des buffers sans superposition
-# library(sfnetworks)
 ```
 
 
@@ -114,8 +111,6 @@ tm_shape(inv_focus) +
   tm_shape(focus) + 
   tm_borders()
 
-# tm_shape(freq_focus) + 
-#   tm_lines()
 ```
 
 On constate que ces tampons se superposent. Cela entraîne des difficultés d'assignation des itinéraires Géovélo qui se situeraient sur une aire de superposition entre deux zones tampon d'aménagements différents : à quel aménagements les assigner dans ces cas ? Par défaut, elles seraient comptabilisées deux fois. Cette situation serait particulièrement problématiques aux carrefours, où les traces seraient comptabilisées un grand nombre de fois. 
@@ -253,9 +248,7 @@ La procédure d'appariement entre les traces Géovélo et les aménagements peut
 
 
 ```{r}
-inv_buff_10m_focus <- inv_focus %>%
-      non_overlapping_buffers(group = "gid", dist = 10, density = 1)
-
+# Une fonction pour refaire la moyenne de fréquentation par zone tampon
 stats_freq_buff <- function(freq_l, inv_buff_s) {
   freq_inv_buff <- freq_l %>%
     st_intersection(inv_buff_s) %>% # Etape 1
@@ -291,9 +284,6 @@ tm_shape(focus) +
 Les tests visuels sur la carte interactive ci-dessus semble cohérents. On applique la procédure à l'ensemble des traces et aménagements.
 
 ```{r eval=FALSE}
-# On a segmenté pour faciliter le débuggage en cas d'erreur 
-# les étapes mettent plusieurs minutes à tourner sur le jeu complet
-
 
 # Etapes 1 à 3
 freq_inv_buff_10m_focus <- freq_axes_2021 %>%
@@ -306,7 +296,7 @@ freq_inv_all <- nm_inv %>%
 freq_inv_all %>%
   st_transform("EPSG:3947") %>%
   select(-geo_point_2d) %>%
-  st_write("amenagements_cyclables_NM_freqs_Geovelo_essai_01.shp")
+  st_write("amenagements_cyclables_NM_freqs_Geovelo_essai_02.shp")
 
 ```
 
