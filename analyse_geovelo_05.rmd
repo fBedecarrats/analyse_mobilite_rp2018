@@ -22,6 +22,13 @@ library(sf)
 library(tmap)
 library(tidygeocoder)
 library(purrr)
+
+
+# Système de coordonnées de référence du projet
+my_crs <- "EPSG:27572"
+# On a pris celui-ci par erreur, à remplacer à terme par "EPSG:3947" qui est
+# le système de référence de la collectivité. Il faudra alors re-générer 
+# les zones tampons sans superposition (très long)
 ```
 
 
@@ -39,13 +46,13 @@ nm_inv_file <- "amenagements-cyclables-nantes-metropole-enrichis.geojson"
 
 freq_axes_2021 <- paste0(loc_geovelo, freq_file) %>%
   read_sf() %>%
-  st_transform(crs = "EPSG:27572") # on la passe en Lambert 2
+  st_transform(crs = my_crs) # on la passe en Lambert 2
 amenagements <- paste0(loc_geovelo, amenag_file) %>%
   read_sf() %>%
-  st_transform(crs = "EPSG:27572") # on la passe en Lambert 2
+  st_transform(crs = my_crs) # on la passe en Lambert 2
 nm_inv <- paste0(loc_geovelo, nm_inv_file) %>%
   read_sf() %>%
-  st_transform(crs = "EPSG:27572") # on la passe en Lambert 2
+  st_transform(crs = my_crs) # on la passe en Lambert 2
 
 # Ajouter cartes générales
 ```
@@ -63,14 +70,15 @@ focus_centre <- data.frame(address = "Place René Bouhier, Nantes") %>%
   select(long, lat) %>% # on ne garde que le xy
   as.numeric() %>% # qu'on passe en format numérique attendu par st_point
   st_point() %>% # On le spécifie en point
-  st_sfc(crs = "EPSG:4326") %>% # on crée une géométrie en précisant que c'est du WSG84
-  st_transform(crs = "EPSG:27572") # on la passe en Lambert 2
+  st_sfc(crs = "EPSG:4326") %>% # on crée une géométrie en précisant que la source
+  # est en WSG84
+  st_transform(crs = my_crs) # on la passe en Lambert 2
 
 # On crée une boîte de 500m 
 focus <- focus_centre %>% # On repart du centre
   st_buffer(dist = 250) %>% # On crée un cercle de 250m de rayon
   st_make_grid(n = 1)%>%  # On crée un carré qui l'entoure
-  st_transform(crs = "EPSG:27572")
+  st_transform(crs = my_crs)
 
 amenag_focus <- st_intersection(amenagements, focus)
 freq_focus <- st_intersection(freq_axes_2021, focus)
@@ -84,7 +92,8 @@ tm_shape(freq_focus) +
   tm_lines(col = "orange") + 
 tm_shape(focus) + 
   tm_borders() + 
-tm_legend()
+tm_legend() +
+tm_layout(title= "Superposition des données d'aménagements (vert) et de passages Géovélo (orange)")
 
 ```
 
@@ -109,7 +118,8 @@ tm_shape(inv_focus_b10) +
 tm_shape(inv_focus) + 
   tm_lines(col = "darkgreen", legend.show = TRUE) +
   tm_shape(focus) + 
-  tm_borders()
+  tm_borders() +
+tm_layout(title= "Emprise de zones tampon simples")
 
 ```
 
@@ -199,7 +209,7 @@ for (i in 1:length(buffer_distances)) {
     unzip(paste0(output_path, ".zip"), exdir = "temp")
     temp <- st_read(paste0("temp/", output_filename, ".shp"),
                     quiet = TRUE)
-    st_crs(temp) <- "EPSG:27572"
+    st_crs(temp) <- my_crs
     assign(paste0("inv_buff_", buffer_distances[i], "m"), temp)
     rm(temp)
   }
@@ -213,7 +223,8 @@ tm_shape(inv_buff_10m_focus) +
 tm_shape(inv_focus) + 
   tm_lines(col = "darkgreen", legend.show = TRUE) + 
 tm_shape(focus) + 
-  tm_borders()
+  tm_borders() +
+tm_layout(title= "Emprise de zones tampon sans superposition")
 
 ```
 
@@ -235,7 +246,8 @@ tm_shape(inv_focus) +
 tm_shape(freq_focus) + 
   tm_lines(col = "orange") +
 tm_shape(focus) + 
-  tm_borders()
+  tm_borders() +
+tm_layout(title= "Report des fréquences de passages Géovélo vers les aménagements cyclables en fonction de leur intersection avec les zones tampon")
 ```
 
 La procédure d'appariement entre les traces Géovélo et les aménagements peut être réalisée de la sorte :  
@@ -278,14 +290,26 @@ tm_shape(freq_inv_focus) +
 tm_shape(freq_focus) + 
   tm_lines(col = "orange") +
 tm_shape(focus) + 
-  tm_borders()
+  tm_borders() +
+tm_layout(title= "Données d'aménagements enrichies avec les fréquences de passage")
 ```
 
 Les tests visuels sur la carte interactive ci-dessus semble cohérents. On applique la procédure à l'ensemble des traces et aménagements.
 
 ```{r eval=FALSE}
-
-# Etapes 1 à 3
+# Paramètres à modifier si besoin
+reference_file <- "amenagements_cyclables_NM_freqs_Geovelo_essai_02"
+ref_file_crs <- "EPSG:3947"
+# La suite prend le fichier s'il existe ou le génère à nouveau
+ref_file_path <- paste0("data/Geovelo/", reference_file, ".zip")
+if (file.exists(ref_file_path) {
+  unzip(ref_file_path, exdir = "temp")
+  freq_inv_all  <- st_read(paste0("temp/", reference_file, ".shp"),
+                    quiet = TRUE)
+    st_crs(freq_inv_all) <- ref_file_crs %>%
+      st_transform(my_crs)
+} else {
+  # Etapes 1 à 3
 freq_inv_buff_10m_focus <- freq_axes_2021 %>%
   stats_freq_buff(inv_buff_10m)
 
@@ -293,10 +317,21 @@ freq_inv_buff_10m_focus <- freq_axes_2021 %>%
 freq_inv_all <- nm_inv %>% 
   left_join(freq_inv_buff_10m_focus, by = "gid")
 
+# On exporte le fichier en shapefile
 freq_inv_all %>%
   st_transform("EPSG:3947") %>%
   select(-geo_point_2d) %>%
-  st_write("amenagements_cyclables_NM_freqs_Geovelo_essai_02.shp")
+  st_write(paste0(reference_file, ".shp"))
+
+# On enregistre le tout en zip dans le dossier data
+zip(ref_file_path, c(paste0(reference_file, ".shp"),
+                     paste0(reference_file, ".dbf"),
+                     paste0(reference_file, ".prj"),
+                     paste0(reference_file, ".shx"))
+
+}
+
+
 
 ```
 
