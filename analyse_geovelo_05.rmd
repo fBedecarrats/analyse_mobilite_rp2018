@@ -1,7 +1,7 @@
 ---
 title: "Analyse des données de Géovélo"
 author: "Document de travail, Nantes Métropole"
-date: "26/02/2022"
+date: "26/03/2022"
 output:
   html_document:
     toc: true
@@ -87,15 +87,16 @@ inv_focus <- nm_inv %>%
   st_intersection(focus)
 
 tmap_mode("view")
-tm_shape(inv_focus) + 
+map1 <- tm_shape(inv_focus) + 
   tm_lines(col = "green")+ 
 tm_shape(freq_focus) + 
   tm_lines(col = "orange") + 
 tm_shape(focus) + 
   tm_borders() + 
-tm_legend() +
-tm_layout(title= "Superposition des données d'aménagements (vert) et de passages Géovélo (orange)")
+tm_legend() # +
+ # tm_layout(title= "Superposition des données d'aménagements (vert) et de passages Géovélo (orange)")
 
+map1
 ```
 
 On observe ici qu'il y a un décalage entre la localisation des aménagements et celles des traes Geovélo. 
@@ -114,13 +115,15 @@ inv_focus_b10 <- st_buffer(inv_focus, 10)
 
 # TODO : mettre en forme pour ajouter la fréquentation Géovélo
 
-tm_shape(inv_focus_b10) + 
+map2 <- tm_shape(inv_focus_b10) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
 tm_shape(inv_focus) + 
   tm_lines(col = "darkgreen", legend.show = TRUE) +
   tm_shape(focus) + 
-  tm_borders() +
-tm_layout(title= "Emprise de zones tampon simples")
+  tm_borders() # +
+ # tm_layout(title= "Emprise de zones tampon simples")
+
+map2
 
 ```
 
@@ -219,13 +222,15 @@ for (i in 1:length(buffer_distances)) {
 inv_buff_10m_focus <- inv_buff_10m %>%
   st_intersection(focus)
 
-tm_shape(inv_buff_10m_focus) + 
+map3 <- tm_shape(inv_buff_10m_focus) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
 tm_shape(inv_focus) + 
   tm_lines(col = "darkgreen", legend.show = TRUE) + 
 tm_shape(focus) + 
-  tm_borders() +
-tm_layout(title= "Emprise de zones tampon sans superposition")
+  tm_borders() # +
+# tm_layout(title= "Emprise de zones tampon sans superposition")
+
+map3
 
 ```
 
@@ -240,15 +245,17 @@ On s'appuie donc maintenant sur les zones tamon non superposées pour affecter l
 On visualise d'abord les traces géographiques disponibles.
 
 ```{r}
-tm_shape(inv_buff_10m_focus) + 
+map4 <- tm_shape(inv_buff_10m_focus) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
 tm_shape(inv_focus) + 
   tm_lines(col = "darkgreen", legend.show = TRUE) +
 tm_shape(freq_focus) + 
   tm_lines(col = "orange") +
 tm_shape(focus) + 
-  tm_borders() +
-tm_layout(title= "Report des fréquences de passages Géovélo vers les aménagements cyclables en fonction de leur intersection avec les zones tampon")
+  tm_borders() # +
+ # tm_layout(title= "Report des fréquences de passages Géovélo vers les aménagements cyclables en fonction de leur intersection avec les zones tampon")
+
+map4
 ```
 
 La procédure d'appariement entre les traces Géovélo et les aménagements peut être réalisée de la sorte :  
@@ -284,20 +291,22 @@ freq_inv_focus <- inv_focus %>%
   left_join(freq_inv_buff_10m_focus, by = "gid")
 
 # Plot result
-tm_shape(inv_buff_10m_focus) + 
+map5 <- tm_shape(inv_buff_10m_focus) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
 tm_shape(freq_inv_focus) + 
   tm_lines(col = "darkgreen") +
 tm_shape(freq_focus) + 
   tm_lines(col = "orange") +
 tm_shape(focus) + 
-  tm_borders() +
-tm_layout(title= "Données d'aménagements enrichies avec les fréquences de passage")
+  tm_borders() # +
+# tm_layout(title= "Données d'aménagements enrichies avec les fréquences de passage")
+
+map5
 ```
 
 Les tests visuels sur la carte interactive ci-dessus semble cohérents. On applique la procédure à l'ensemble des traces et aménagements.
 
-```{r eval=FALSE}
+```{r eval}
 # Paramètres à modifier si besoin
 reference_file <- "amenagements_cyclables_NM_freqs_Geovelo_essai_03"
 ref_file_crs <- "EPSG:3947"
@@ -345,12 +354,12 @@ A améliorer à ce stade :
 ```{r}
 stats_inv <- freq_inv_all %>%
   st_drop_geometry() %>%
-  group_by(type_amenagement) %>%
+  group_by(typ_mng) %>%
   summarise(`Nombre` = n(),
-            `Longueur totale` = sum(shape_length),
-            `Moyenne de passages` = mean(facility_frequency, na.rm = TRUE),
+            `Longueur totale` = sum(shp_lng),
+            `Moyenne de passages` = mean(fclty_f, na.rm = TRUE),
             `Moyenne pondérée par la longueur` = 
-              weighted.mean(facility_frequency, facility_frequency, na.rm = TRUE)) %>%
+              weighted.mean(fclty_f, shp_lng, na.rm = TRUE)) %>%
   arrange(desc(`Moyenne de passages`))
 
 kable(stats_inv)
