@@ -303,6 +303,7 @@ reference_file <- "amenagements_cyclables_NM_freqs_Geovelo_essai_03"
 ref_file_crs <- "EPSG:3947"
 # La suite prend le fichier s'il existe ou le génère à nouveau
 ref_file_path <- paste0("data/Geovelo/", reference_file, ".zip")
+
 if (file.exists(ref_file_path)) {
   unzip(ref_file_path, exdir = "temp")
   freq_inv_all  <- st_read(paste0("temp/", reference_file, ".shp"),
@@ -313,22 +314,22 @@ if (file.exists(ref_file_path)) {
   # Etapes 1 à 3
   freq_inv_buff_10m <- freq_axes_2021 %>%
     stats_freq_buff(inv_buff_10m)
-  
+
   # Etapes 4 et 5
-  freq_inv_all <- nm_inv %>% 
+  freq_inv_all <- nm_inv %>%
     left_join(freq_inv_buff_10m, by = "gid")
-  
+
   # On exporte le fichier en shapefile
   freq_inv_all %>%
     st_transform("EPSG:3947") %>%
     select(-geo_point_2d) %>%
     st_write(paste0(reference_file, ".shp"))
-  
+
   # On enregistre le tout en zip dans le dossier data
   zip(ref_file_path, c(paste0(reference_file, ".shp"),
                        paste0(reference_file, ".dbf"),
                        paste0(reference_file, ".prj"),
-                       paste0(reference_file, ".shx"))
+                       paste0(reference_file, ".shx")))
       
 }
 
@@ -352,7 +353,7 @@ stats_inv <- freq_inv_all %>%
               weighted.mean(facility_frequency, facility_frequency, na.rm = TRUE)) %>%
   arrange(desc(`Moyenne de passages`))
 
-kable(stat_inv)
+kable(stats_inv)
 ```
 
 

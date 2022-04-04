@@ -11,6 +11,9 @@ chown -R rstudio:users $WORK_DIR
 # copy files from S3 
 mc cp -r s3/fbedecarrats/diffusion/mobilites/data $WORK_DIR
 
+# Again to give ritghs also in the data subfolder 
+chown -R rstudio:users $WORK_DIR
+
 # launch RStudio in the right project
 # Copied from InseeLab UtilitR
     echo \
