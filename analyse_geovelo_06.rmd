@@ -270,6 +270,54 @@ La procédure d'appariement entre les traces Géovélo et les aménagements peut
 4. Report des sommes réalisées en 3. vers les aménagements associés ;
 5. Pour chaque aménagement, diviser le produit calculé à l'étape 2. et sommé à l'étape 3 par la longueur de l'aménagement associé.
 
+```{r}
+
+# On extrait les azimuts et gid des investissements
+azimuts_inv <- nm_inv %>%
+  st_drop_geometry() %>%
+  select(gid, azimut_amgt)
+
+# On rappartrie l'azimut de l'aménagement dans le buffer correspondant
+inv_buff_10m_focus2 <- inv_buff_10m_focus %>%
+  left_join(azimuts_inv, by = "gid")
+
+parallel_intersects <- function(x, y, angle_tolerance) {
+  st_intesects(x, y) & 
+    (x$azimut_freq >= y$azimut_amgt - angle_tolerance |
+       x$azimut_freq <= y$azimut_amgt + angle_tolerance)
+}
+  
+
+test <- freq_focus %>%
+  st_join()
+  
+  
+    st_intersection(inv_buff_s) %>% # Etape 1
+    mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
+    rename(geovelo_frequency = frequency) %>%
+    group_by(gid) %>% # Etape 3
+    summarize(facility_frequency = weighted.mean(geovelo_frequency,
+                                                 geovelo_paths_length, 
+                                                 na.rm = TRUE))  %>%
+    st_drop_geometry()
+
+
+# Une fonction pour refaire la moyenne de fréquentation par zone tampon
+stats_freq_buff2 <- function(freq_l, inv_buff_s, angle_tolerance = 20) {
+  freq_inv_buff <- freq_l %>%
+    st_intersection(inv_buff_s) %>% # Etape 1
+    mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
+    rename(geovelo_frequency = frequency) %>%
+    group_by(gid) %>% # Etape 3
+    summarize(facility_frequency = weighted.mean(geovelo_frequency,
+                                                 geovelo_paths_length, 
+                                                 na.rm = TRUE))  %>%
+    st_drop_geometry()
+  
+}
+
+```
+
 
 ```{r}
 # Une fonction pour refaire la moyenne de fréquentation par zone tampon
@@ -308,7 +356,7 @@ tm_shape(focus) +
 map5
 ```
 
-Les tests visuels sur la carte interactive ci-dessus semble cohérents. On applique la procédure à l'ensemble des traces et aménagements.
+Les tests visuels sur la carte interactive ci-dessus semblent cohérents. On applique la procédure à l'ensemble des traces et aménagements.
 
 ```{r eval}
 # Paramètres à modifier si besoin
