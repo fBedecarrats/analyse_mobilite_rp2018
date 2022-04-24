@@ -11,13 +11,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-> Résumé
-
-La pratique du vélo constitue un enjeu de politique publique important. Elle répond à une demande de mobilité des populations, et son essor contribue à la réduction des émissions de gaz à effet de serre et à l'activité physique, en évitant de contribuer à certaines nuisances associées aux modes de transport motorisés (bruit, qualité de l'air, emprise sur l'espace public, congestion). Les collectivités locales disposent de plusieurs moyens d'actions pour favoriser la pratique du vélo, en particulier l'aménagement cyclable, c'est-à-dire la création, l'amélioration et la maintenance de dispositifs de voirie organisant la circulation et le stationnement des vélos. 
-
-Plusieurs considérations président aux aménagements cyclables : leur localisation et interconnexion, le niveau de séparation qu'ils établissent avec les autres modes de déplacement et les autres usages de l'espace public au détriment desquels ils s'instaurent (une piste cyclable implique souvent de supprimer des places de parking, de rétrécir les voies dévolues à la circulation des voitures ou des piétons). Les collectivités locales 
-Plusieurs sources d'informations peuvent être mobilisées par les collectivités locales pour 
-
+> **Résumé :** 
 
 ```{r setup, include=FALSE} 
 # Ce bloc définit des options d'affichage pour l'ensemble du document
@@ -32,48 +26,56 @@ library(purrr)
 library(knitr)
 library(stplanr)
 
-
-
-# Système de coordonnées de référence du projet
-my_crs <- "EPSG:27572"
-# On a pris celui-ci par erreur, à remplacer à terme par "EPSG:3947" qui est
-# le système de référence de la collectivité. Il faudra alors re-générer 
-# les zones tampons sans superposition (très long)
+# Système de coordonnées de référence du projet (CC47)
+my_crs <- "EPSG:3947"
 ```
 
+# Introduction
 
-# Enjeux
+La pratique du vélo constitue un enjeu de politique publique important. Elle répond à une demande de mobilité des populations, et son essor contribue à la réduction des émissions de gaz à effet de serre et à l'activité physique, en évitant de contribuer à certaines nuisances associées aux modes de transport motorisés (bruit, qualité de l'air, emprise sur l'espace public, congestion). Les collectivités locales disposent de plusieurs moyens d'actions pour favoriser la pratique du vélo, en particulier l'aménagement cyclable, c'est-à-dire la création, l'amélioration et la maintenance de dispositifs de voirie organisant la circulation et le stationnement des vélos. 
 
+Plusieurs considérations président aux aménagements cyclables : leur localisation et interconnexion, le niveau de séparation qu'ils établissent avec les autres modes de déplacement et les autres usages de l'espace public au détriment desquels ils s'instaurent (une piste cyclable implique souvent de supprimer des places de parking, de rétrécir les voies dévolues à la circulation des voitures ou des piétons). Plusieurs sources d'informations peuvent être mobilisées par les collectivités locales pour orienter leurs stratégies d'aménagement cyclables :
+
+- Expertise des agents spécialisés : ...
+- Enquêtes de mobilité : ...
+- Comptages ponctuels ou continus : ...
+- Remontées citoyennes ("*crowdsourcing*") : Vigilo, Baromètre des villes cyclables.
+
+
+Les données issues des téléphone cellulaires des usagers constituent une nouvelle source d'information potentielle pour guider les politiques d'aménagements cyclables, à condition de rassembler des critères techniques, juridiques et éthiques suffisants. Les téléphones cellulaires génèrent différents types d'information susceptibles de fournir des données permettant de décrire des trajets et de renseigner sur leur contexte. Il s'agit tout d'abord des signaux émis par les antennes de communication téléphonique et qui sont captés par les antennes des opérateurs environnants et dont la triangulation permet de déduire une position approximative [ref]. Cette méthode reste toutefois trop imprécise spatialement (de 100 à 1000 mètres selon les fréquences hertziennes utilisées [ref]) pour associer une séquence de localisation à un mode de déplacement cyclable et encore moins pour déterminer l'itinéraire précis emprunté par le cycliste. 
+
+Il s'agit ensuite des données de géolocalisations produites par de l'appareil mobile et collectées par des applications logicielles installées sur le terminal. Ces données sont générées plusieurs fois par minute, avec une précision approximative de 10 mètres (hormis le "bruit" de données aberrantes) [ref] et sont complétées de nombreuses autres informations : secousses captées par l'accéléromètre, renseignements du compte utilisateurs référencé dans l'application collectrice, etc. La collecte et l'exploitation de ces données de localisation à des fins commerciales constitue le modèle économique de nombreuses applications mobiles proposées gratuitement aux utilisateurs [ref]. Ce marché collossal est toutefois problétique : les données sont le plus souvent collectées sans le consentement éclairé de l'utilisateur, revendu par des courtiers ne respectant pas la réglementation européennes et parfois exploitées pour des finalités critiquables. Les clients finaux des services produits à partir de ces données ne sont pas toujours exposés juridiquement, mais cette exploitation reste problématique éthiquement. Nantes Métropole a par exemple adopté une charte de la donnée dont les engagements ne sont pas comptatibles avec cette pratique [ref charte, principe X]. En outre, d'un point de vue technique, l'affectation d'un mode de transport reste hasardeuse. Difficile par exemple de distinguer un trajet vélo d'un trajet en voiture en centre ville. 
+
+Une alternative prometteuse réside dans l'exploitation de données collectées par des applications spécifiquement dédiées au vélo, et qui proposent un cadre adapté pour s'assurer du consentement éclairé de l'usager et de l'exploitation éthique de la donnée. C'est le cas notamment de l'application Géovélo.
 
 # Données
 
 ```{r}
-
+# Localisation des données dans le projet
 loc_geovelo <- "data/Geovelo/"
-freq_file <- "stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson"
-amenag_file <- "nantes-metropole-2022-02-26-2022-02-26.geojson"
-nm_inv_file <- "amenagements-cyclables-nantes-metropole-enrichis.geojson"
+freqs_file <- "stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson"
+amgts_file <- "amenagements-cyclables-nantes-metropole-enrichis.geojson"
 
-freq_axes_2021 <- paste0(loc_geovelo, freq_file) %>%
+# Chargement des données correspondantes
+freqs <- paste0(loc_geovelo, freqs_file) %>%
   read_sf() %>%
-  mutate(azimut_freq = line_bearing(.)) %>% # On calcule les azimuts avant projection
-  st_transform(crs = my_crs) # on la passe en Lambert 2
-amenagements <- paste0(loc_geovelo, amenag_file) %>%
+  mutate(azimut_freq = line_bearing(.)) %>% # On calcule les gisements avant projection
+  st_transform(crs = my_crs) # on la passe en CC47
+amgts <- paste0(loc_geovelo, amgts_file) %>%
   read_sf() %>%
-  st_transform(crs = my_crs) # on la passe en Lambert 2
-nm_inv <- paste0(loc_geovelo, nm_inv_file) %>%
-  read_sf() %>%
-  mutate(azimut_amgt = line_bearing(.)) %>%  # On calcule les azimuts avant projection
-  st_transform(crs = my_crs) # on la passe en Lambert 2
-
-# Ajouter cartes générales
+  mutate(azimut_amgt = line_bearing(.)) %>%  # On calcule les gisements avant projection
+  st_transform(crs = my_crs) # on la passe en CC47
 ```
 
-? Description des données
+## Traces Géovélo
 
-# Zoom
+## Echantillonage
 
-On crée une routine permettant de focaliser sur une zone spécifique afin de visualiser les aménagements cyclables (en vert) et les fréquentations d'itinéraires relevées par Géovélo (en orange) à une échelle où peut visuellement en vérifier la cohérence. 
+## Aménagements
+
+# Méthode
+
+## Affectation des traces géovélo aux aménagements
 
 ```{r}
 # On part d'un dataframe contenant une adresse
@@ -84,7 +86,7 @@ focus_centre <- data.frame(address = "René Bouhier, Nantes") %>%
   st_point() %>% # On le spécifie en point
   st_sfc(crs = "EPSG:4326") %>% # on crée une géométrie en précisant que la source
   # est en WSG84
-  st_transform(crs = my_crs) # on la passe en Lambert 2
+  st_transform(crs = my_crs) # on la passe en CC47
 
 # On crée une boîte de 500m 
 focus <- focus_centre %>% # On repart du centre
@@ -92,23 +94,79 @@ focus <- focus_centre %>% # On repart du centre
   st_make_grid(n = 1)%>%  # On crée un carré qui l'entoure
   st_transform(crs = my_crs)
 
-amenag_focus <- st_intersection(amenagements, focus)
-freq_focus <- st_intersection(freq_axes_2021, focus)
-inv_focus <- nm_inv %>%
+# On filtre nos données pour ne garder que celles qui sont dans le focus
+freqs_focus <- st_intersection(freqs, focus)
+amgts_focus <- amgts %>%
   st_intersection(focus)
 
-tmap_mode("view")
-map1 <- tm_shape(inv_focus) + 
+library(maptiles)
+backgound_focus <- get_tiles(focus, provider = "Stamen.TonerLite", 
+                             zoom = 17, crop = TRUE)
+
+tmap_mode("plot")
+map1 <- tm_shape(backgound_focus) +
+  tm_rgb() +
+tm_shape(amgts_focus) + 
   tm_lines(col = "green")+ 
-tm_shape(freq_focus) + 
+tm_shape(freqs_focus) + 
   tm_lines(col = "orange") + 
 tm_shape(focus) + 
   tm_borders() + 
-tm_legend() # +
- # tm_layout(title= "Superposition des données d'aménagements (vert) et de passages Géovélo (orange)")
+tm_legend() 
 
+map2 <- tm_shape(amgts_focus) + 
+  tm_lines(col = "green")+ 
+tm_shape(freqs_focus) + 
+  tm_lines(col = "orange", lwd = "frequency", scale = 5) + 
+tm_shape(focus) + 
+  tm_borders() + 
+tm_legend() 
+map2
 map1
+
+
+
 ```
+
+## Analyses par type d'aménagements
+
+# Résultats
+
+## Fréquentation cycliste moyenne par type d'équipement
+
+## Tronçons non aménagés les plus fréquentées par des cyclistes
+
+## Tronçons avec un faible niveau d'aménagement les plus fréquentés
+
+## Tronçons avec un niveau élevé d'équipement les moins fréquentés 
+
+# Discussion
+
+## Utilité pour la prise de décision d'aménagements
+
+## Biais de la donnée
+
+## Complémentarité avec d'autres sources
+
+# Conclusion
+
+
+
+
+# Enjeux
+
+
+# Données
+
+
+
+? Description des données
+
+# Zoom
+
+On crée une routine permettant de focaliser sur une zone spécifique afin de visualiser les aménagements cyclables (en vert) et les fréquentations d'itinéraires relevées par Géovélo (en orange) à une échelle où peut visuellement en vérifier la cohérence. 
+
+
 
 On observe ici qu'il y a un décalage entre la localisation des aménagements et celles des traes Geovélo. 
 
