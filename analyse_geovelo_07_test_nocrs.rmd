@@ -61,13 +61,13 @@ amgts_file <- "amenagements-cyclables-nantes-metropole-enrichis.geojson"
 
 # Chargement des données correspondantes
 freqs <- paste0(loc_geovelo, freqs_file) %>%
-  read_sf() %>%
-  mutate(azimut_freq = line_bearing(.)) %>% # On calcule les gisements avant projection
-  st_transform(crs = my_crs) # on la passe en CC47
+  read_sf() # %>%
+  # mutate(azimut_freq = line_bearing(.)) # %>% # On calcule les gisements avant projection
+  # st_transform(crs = my_crs) # on la passe en CC47
 amgts <- paste0(loc_geovelo, amgts_file) %>%
   read_sf() %>%
-  mutate(azimut_amgt = line_bearing(.)) %>%  # On calcule les gisements avant projection
-  st_transform(crs = my_crs) # on la passe en CC47
+  mutate(azimut_amgt = line_bearing(., bidirectional = TRUE)) # %>%  # On calcule les gisements avant projection
+  # st_transform(crs = my_crs) # on la passe en CC47
 ```
 
 ## Traces Géovélo
@@ -87,15 +87,15 @@ focus_centre <- data.frame(address = "René Bouhier, Nantes") %>%
   select(long, lat) %>% # on ne garde que le xy
   as.numeric() %>% # qu'on passe en format numérique attendu par st_point
   st_point() %>% # On le spécifie en point
-  st_sfc(crs = "EPSG:4326") %>% # on crée une géométrie en précisant que la source
+  st_sfc(crs = "EPSG:4326") # %>% # on crée une géométrie en précisant que la source
   # est en WSG84
-  st_transform(crs = my_crs) # on la passe en CC47
+  #st_transform(crs = my_crs) # on la passe en CC47
 
 # On crée une boîte de 500m 
 focus <- focus_centre %>% # On repart du centre
   st_buffer(dist = 250) %>% # On crée un cercle de 250m de rayon
-  st_make_grid(n = 1)%>%  # On crée un carré qui l'entoure
-  st_transform(crs = my_crs)
+  st_make_grid(n = 1) # %>%  # On crée un carré qui l'entoure
+  # st_transform(crs = my_crs)
 
 # On filtre nos données pour ne garder que celles qui sont dans le focus
 freqs_focus <- st_intersection(freqs, focus)
@@ -177,8 +177,9 @@ buffer_no_overlap <- function(x, dist = set_units(10, m),
   return(x_vd_region_distinct)
 }
 # On génère les buffers sans superposition
-amgts_focus_buff10b <- buffer_no_overlap(amgts_focus, 
-                                         group = c("gid", "azimut_amgt"))
+amgts_focus_buff10b <- buffer_no_overlap(st_transform(amgts_focus, my_crs), 
+                                         group = c("gid", "azimut_amgt")) %>%
+  st_transform(crs = "EPSG:4326")
 
 map3 <- tm_shape(amgts_focus_buff10) + 
   tm_polygons(col = "blue", alpha = 0.1, legend.show = TRUE) +
@@ -204,53 +205,77 @@ map4 <- tm_shape(amgts_focus_buff10b) +
 
 tmap_arrange(map3, map4, ncol = 2, widths = widths_maps )
 
-# freq_focusb <- freqs_focus %>%
-#   line_breakup(amgts_focus_buff10b) %>%
-#   st_transform(crs = "EPSG:4326") %>%
-#   mutate(diff_azimut_freq = angle_diff(., angle = azimut_amgt) %>%
-#   st_transform(crs = my_crs) %>%
-#   st_join(amgts_focus_buff10b) %>%
-#   mutate(oblique = (azimut_freq -20 > azimut_amgt |
-#                       azimut_freq +20 < azimut_amgt),
-#          relation = ifelse(is.na(gid), "out", 
-#                            ifelse(oblique, "oblique", "in")))
 
-freqs_focus_wsg84 <- freqs_focus %>%
-  st_transform(crs = "EPSG:4326") 
-amgts_focus_buff10b_wsg84  <- amgts_focus_buff10b  %>%
-  st_transform(crs = "EPSG:4326")
+freq_focusb <- freqs_focus %>%
+  st_split(amgts_focus_buff10b) %>%
+  st_intersection(amgts_focus_buff10b) 
 
-freq_focusb <- freqs_focus_wsg84 %>%
-  line_breakup(amgts_focus_buff10b_wsg84) %>%
-  st_join(amgts_focus_buff10b)
-
-freq_focus_out <- freq_focusb %>%
-  filter(is.na(gid))
+# A vérifier, pas indispensable
+# freqs_focus_out <- st_difference(freqs_focus, amgts_focus_buff10b)
 
 freq_focusb <- freq_focusb %>%
-  filter(!is.na(gid)) %>%
-  st_transform(crs = "EPSG:4326") %>%
-  mutate(angle_diff = angle_diff(., angle = azimut_amgt, bidirectional = TRUE)) %>%
-  st_transform(crs = my_crs)
+  mutate(angle_diff = angle_diff(., angle = azimut_amgt, 
+                                 bidirectional = TRUE))
 
 freq_focus_oblique <- freq_focusb %>%
-  filter(angle_diff > 20)
+  filter(angle_diff > 20 & angle_diff < 160)
 
 freq_focus_in <- freq_focusb %>%
-  filter(angle_diff <= 20)
+  filter(angle_diff <= 20 | angle_diff >= 160)
 
 map5 <- tm_shape(amgts_focus_buff10b) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
   tm_shape(amgts_focus) + 
   tm_lines(col = "darkgreen", legend.show = TRUE) +
-  tm_shape(freq_focus_out) +
-  tm_lines(col = "pink") +
+  tm_shape(freqs_focus) +
+  tm_lines(col = "purple", lwd = 0.7) +
   tm_shape(freq_focus_oblique) +
-  tm_lines(col = "darkred") +
+  tm_lines(col = "red") +
   tm_shape(freq_focus_in) +
-  tm_lines(col = "orange")
+  tm_lines(col = "orange") +
+  tm_layout(main.title = "1.5 Sélection des tracés à affecter",
+            main.title.size = main_title_size)
 
 map5
+
+stats_freq_buff <- function(freq_l, inv_buff_s) {
+  freq_inv_buff <- freq_l %>%
+    st_intersection(inv_buff_s) %>% # Etape 1
+    mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
+    rename(geovelo_frequency = frequency) %>%
+    group_by(gid) %>% # Etape 3
+    summarize(facility_frequency = weighted.mean(geovelo_frequency,
+                                                 geovelo_paths_length, 
+                                                 na.rm = TRUE))  %>%
+    st_drop_geometry()
+}
+
+# Etapes 1 à 3
+freq_amgts_focus_buff10b <- freq_focus_in %>%
+  stats_freq_buff(amgts_focus_buff10b)
+
+# Etapes 4 et 5
+freq_amgt_focus <- amgts_focus %>% 
+  left_join(freq_amgts_focus_buff10b, by = "gid") %>%
+  rename(Passages = facility_frequency)
+
+# Map1 simple avec fond de carte
+map6 <- tm_shape(backgound_focus) +
+  tm_rgb() +
+tm_shape(freq_amgt_focus) + 
+  tm_lines(col = "green", lwd = "Passages", scale = 5)+ 
+tm_shape(focus) + 
+  tm_borders() + 
+tm_legend() +
+  tm_layout(main.title = "1.6 Aménagements enrichis",
+            main.title.size = main_title_size, legend.outside = TRUE) + 
+  tm_add_legend(type = "line", labels = "Aménagements", col = "green") +
+  tm_add_legend(type = "line", labels = "Hors tampons", col = "purple",
+                title = "Traces Géovélo") +
+  tm_add_legend(type = "line", labels = "Trop obliques", col = "red") + 
+  tm_add_legend(type = "line", labels = "A affecter", col = "orange") 
+
+tmap_arrange(map5, map6, ncol = 2, widths = widths_maps )
 ```
 
 ## Analyses par type d'aménagements
