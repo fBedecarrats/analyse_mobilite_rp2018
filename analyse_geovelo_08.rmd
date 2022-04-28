@@ -1,0 +1,568 @@
+---
+title: "Utilité et méthodes d'exploitation des données mobiles pour éclairer l'aménagement cyclable : illustration avec l'exploitation des données Géovélo à Nantes Métropole"
+author: "Florent Bédécarrats et Matthieu Janicki (Nantes Métropole)"
+date: "23/04/2022"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+> **Résumé :** 
+
+```{r setup, include=FALSE} 
+# Ce bloc définit des options d'affichage pour l'ensemble du document
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+# Installation des librairies
+library(tidyverse)
+library(sf)
+library(tmap)
+library(tidygeocoder)
+library(purrr)
+library(knitr)
+library(stplanr)
+library(maptiles)
+library(cowplot)
+library(units)
+library(lwgeom)
+
+# Système de coordonnées de référence du projet (CC47)
+my_crs <- "EPSG:3947"
+```
+
+# Introduction
+
+La pratique du vélo constitue un enjeu de politique publique important. Elle répond à une demande de mobilité des populations et son essor contribue à la réduction des émissions de gaz à effet de serre et à l'activité physique, en évitant de contribuer à certaines nuisances associées aux modes de transport motorisés (bruit, qualité de l'air, emprise sur l'espace public, congestion). Les collectivités locales disposent de plusieurs moyens d'action pour favoriser la pratique du vélo, en particulier l'aménagement cyclable, c'est-à-dire la création, l'amélioration et la maintenance de dispositifs de voirie organisant la circulation et le stationnement des vélos. 
+
+Plusieurs considérations président aux aménagements cyclables : leur localisation et interconnexion, le niveau de séparation qu'ils établissent avec les autres modes de déplacement et les autres usages de l'espace public au détriment desquels ils s'instaurent (une piste cyclable implique souvent de supprimer des places de parking, de rétrécir les voies dévolues à la circulation des voitures ou des piétons). Différentes sources d'informations peuvent être mobilisées par les collectivités locales pour orienter leurs stratégies d'aménagement cyclables :
+
+- Expertise des agents spécialisés : ...
+- Enquêtes de mobilité : ...
+- Comptages ponctuels ou continus : ...
+- Remontées citoyennes ("*crowdsourcing*") : Vigilo, Baromètre des villes cyclables.
+
+
+Les données issues des téléphone cellulaires des usagers constituent une nouvelle source d'information potentielle pour guider les politiques d'aménagements cyclables, à condition de rassembler des critères techniques, juridiques et éthiques suffisants. Les téléphones cellulaires génèrent différents types d'information susceptibles de fournir des données permettant de décrire des trajets et de renseigner sur leur contexte. Il s'agit tout d'abord des signaux émis par les antennes de communication téléphonique et qui sont captés par les antennes des opérateurs environnants et dont la triangulation permet de déduire une position approximative [ref]. Cette méthode reste toutefois trop imprécise spatialement (de 100 à 1000 mètres selon les fréquences hertziennes utilisées [ref]) pour associer une séquence de localisation à un mode de déplacement cyclable et encore moins pour déterminer l'itinéraire précis emprunté par le cycliste. 
+
+Il s'agit ensuite des données de géolocalisations produites par de l'appareil mobile et collectées par des applications logicielles installées sur le terminal. Ces données sont générées plusieurs fois par minute, avec une précision approximative de 10 mètres (hormis le "bruit" de données aberrantes) [ref] et sont complétées de nombreuses autres informations : secousses captées par l'accéléromètre, renseignements du compte utilisateurs référencé dans l'application collectrice, etc. La collecte et l'exploitation de ces données de localisation à des fins commerciales constitue le modèle économique de nombreuses applications mobiles proposées gratuitement aux utilisateurs [ref]. Ce marché collossal est toutefois problétique : les données sont le plus souvent collectées sans le consentement éclairé de l'utilisateur, revendu par des courtiers ne respectant pas la réglementation européennes et parfois exploitées pour des finalités critiquables. Les clients finaux des services produits à partir de ces données ne sont pas toujours exposés juridiquement, mais cette exploitation reste problématique éthiquement. Nantes Métropole a par exemple adopté une charte de la donnée dont les engagements ne sont pas comptatibles avec cette pratique [ref charte, principe X]. En outre, d'un point de vue technique, l'affectation d'un mode de transport reste hasardeuse. Difficile par exemple de distinguer un trajet vélo d'un trajet en voiture en centre ville. 
+
+Une alternative prometteuse réside dans l'exploitation de données collectées par des applications spécifiquement dédiées au vélo, et qui proposent un cadre adapté pour s'assurer du consentement éclairé de l'usager et de l'exploitation éthique de la donnée. C'est le cas notamment de l'application Géovélo.
+
+# Données
+
+```{r}
+# Localisation des données dans le projet
+loc_geovelo <- "data/Geovelo/"
+freqs_file <- "stats-fréquentation_des_axes-2021-01-01_2021-12-31.geojson"
+amgts_file <- "amenagements-cyclables-nantes-metropole-enrichis.geojson"
+
+# Chargement des données correspondantes
+freqs <- paste0(loc_geovelo, freqs_file) %>%
+  read_sf() # %>%
+  # mutate(azimut_freq = line_bearing(.)) # %>% # On calcule les gisements avant projection
+  # st_transform(crs = my_crs) # on la passe en CC47
+amgts <- paste0(loc_geovelo, amgts_file) %>%
+  read_sf() %>%
+  mutate(azimut_amgt = line_bearing(., bidirectional = TRUE)) # %>%  # On calcule les gisements avant projection
+  # st_transform(crs = my_crs) # on la passe en CC47
+```
+
+## Traces Géovélo
+
+## Echantillonage
+
+## Aménagements
+
+# Méthode
+
+## Affectation des traces géovélo aux aménagements
+
+On crée une routine permettant de focaliser sur une zone spécifique afin de visualiser les aménagements cyclables (en vert) et les fréquentations d'itinéraires relevées par Géovélo (en orange) à une échelle où peut visuellement en vérifier la cohérence.  On observe ici qu'il y a un décalage entre la localisation des aménagements et celles des traces Geovélo. 
+
+Pour attribuer aux aménagements les fréquentations itinéraires relevées par Géovélo, on constitue des zones tampon autour de des aménagements et on considère que les itinéraires Géovélo qui traversent ces zones tampons transitent par l'aménagement. Un pemier essai avec de constitution de tampons "simples" avec une distance de 10 mètres.
+
+On constate que ces tampons se superposent. Cela entraîne des difficultés d'assignation des itinéraires Géovélo qui se situeraient sur une aire de superposition entre deux zones tampon d'aménagements différents : à quel aménagements les assigner dans ces cas ? Par défaut, elles seraient comptabilisées deux fois. Cette situation serait particulièrement problématiques aux carrefours, où les traces seraient comptabilisées un grand nombre de fois. 
+
+On définit donc une méthode permettant de générer des tampons qui ne se superposent pas. Elle s'appuient sur la constitution de diagrammes de Voronoï. Cette procédure est très gourmande/chronophage en termes de calcul, car les diagrammes de Voronoï prennent comme référence des points et pas des lignes. Ici on doit décomposer chaque ligne en une série de points rapprochés, pour ensuite fusionner les polygonnes du diagramme de Voronoï appartenant à une même ligne. 
+
+On a bien maintenant des polygones qui ne se recoupent pas et à l'intérieur desquels on va pouvoir affecter les traces Géovélo.
+On s'appuie donc maintenant sur les zones tamon non superposées pour affecter les traces Géovélo.
+- Le filaire d'aménagements, qui contiennent une donnée riche sur ces derniers : identifiant et type d'aménagement ; 
+- Les zones tampons autour des aménagements, qui gardent un identifiant commun avec l'aménagement à partir duquel elles ont été générés ;
+- Les traces Géovélo, qui contiennent une statistique de passage.
+On visualise d'abord les traces géographiques disponibles.
+
+
+La procédure d'appariement entre les traces Géovélo et les aménagements peut être réalisée de la sorte :  
+
+1. resegmentation des itinéraires Géovélo pour que les segments se situent dans les zones tampons d'aménagement et report de l'identifiant de l'aménagement correspondant dans les attributs du segment de l'itinéraire Géovélo  ;
+2. Pour chaque segment Géovélo associé à une zone tampon, calculer la longueur se situant dans la zone tampon de l'aménagement ;
+3. Pour chaque zone tampon on réalise la moyenne des fréquences de fréquentation des itinéraires Géovélo captés, en pondérant cette moyenne par la longueur des segments d'itinéraire capté (la pondération permet de limiter l'incidence des segments adjacents non équipés qui croisent la zone tampon de l'aménagement) ; 
+4. Report des sommes réalisées en 3. vers les aménagements associés ;
+5. Pour chaque aménagement, diviser le produit calculé à l'étape 2. et sommé à l'étape 3 par la longueur de l'aménagement associé.
+
+### Fig.1 : Illustration des étapes de traitement pour l'affectation des traces Géovélo aux aménagements
+
+```{r, fig.height = 9}
+# On part d'un dataframe contenant une adresse
+focus_centre <- data.frame(address = "René Bouhier, Nantes") %>%
+  geocode(address, method = "osm") %>% # on retrouve sa localisation xy
+  select(long, lat) %>% # on ne garde que le xy
+  as.numeric() %>% # qu'on passe en format numérique attendu par st_point
+  st_point() %>% # On le spécifie en point
+  st_sfc(crs = "EPSG:4326") # %>% # on crée une géométrie en précisant que la source
+  # est en WSG84
+  #st_transform(crs = my_crs) # on la passe en CC47
+
+# On crée une boîte de 500m 
+focus <- focus_centre %>% # On repart du centre
+  st_buffer(dist = 250) %>% # On crée un cercle de 250m de rayon
+  st_make_grid(n = 1) # %>%  # On crée un carré qui l'entoure
+  # st_transform(crs = my_crs)
+
+# On filtre nos données pour ne garder que celles qui sont dans le focus
+freqs_focus <- st_intersection(freqs, focus)
+amgts_focus <- amgts %>%
+  st_intersection(focus)
+# Un fond de carte léger pour l'affichage
+backgound_focus <- get_tiles(focus, provider = "Stamen.TonerLite", 
+                             zoom = 17, crop = TRUE)
+# Un paramètre de taille de titre homogène pour toutes les cartes
+main_title_size <- 0.8
+# Map1 simple avec fond de carte
+map1 <- tm_shape(backgound_focus) +
+  tm_rgb() +
+tm_shape(amgts_focus) + 
+  tm_lines(col = "green")+ 
+tm_shape(freqs_focus) + 
+  tm_lines(col = "orange") + 
+tm_shape(focus) + 
+  tm_borders() + 
+tm_legend() +
+  tm_layout(main.title = "Fig. 1.1 Tracés simples en contexte",
+            main.title.size = main_title_size )
+# Map2 with lines proportional to frequency
+map2 <- tm_shape(amgts_focus) + 
+  tm_lines(col = "green")+ 
+tm_shape(rename(freqs_focus, `Passages` = frequency)) + 
+  tm_lines(col = "orange", lwd = "Passages", scale = 5) + 
+tm_shape(focus) + 
+  tm_borders() + 
+tm_layout(main.title = "Fig. 1.2 Tracés proportionels aux passages",
+            main.title.size = main_title_size , legend.outside = TRUE)  +
+  tm_add_legend(type = "line", labels = "Aménagements", col = "green", 
+                title = "Type de tracé") +
+  tm_add_legend(type = "line", labels = "Traces Géovélo", col = "orange")
+
+# Zones tampon, d'abord simple
+amgts_focus_buff10 <- st_buffer(amgts_focus, 10)
+# Une fonction pour créer des buffers sans superposition 
+buffer_no_overlap <- function(x, dist = set_units(10, m), 
+                              density = set_units(1, m),
+                              group) {
+  # Create a merged entity
+  x_union <- x %>%
+    summarise()
+  # Create a buffer
+  x_buffer <- x_union %>%
+    st_buffer(
+      dist = dist
+    ) %>%
+    st_cast() %>%
+    # Remove inside terrestrial parts
+    st_difference(x_union) %>%
+    st_cast()
+  # First merge everything and transform as lines
+  x_lines <- x_union %>%
+    # transform multi-lines as separate unique lines
+    st_cast("LINESTRING")
+  # Then as regular points
+  x_points <- x_lines %>%
+    # transform as points
+    st_line_sample(density = density) %>%
+    st_sf()
+  # Create voronoi polygons around points
+  x_vd_region_distinct <- x_points %>%
+    st_combine() %>%
+    st_voronoi() %>%
+    st_cast() %>%
+    st_intersection(x_buffer) %>%
+    st_cast() %>%
+    st_sf() %>%
+    mutate(id_v = 1:n()) %>%
+    st_join(x) %>%
+    distinct(id_v, .keep_all = TRUE) %>%
+    group_by_at(group) %>%
+    summarise()
+  return(x_vd_region_distinct)
+}
+# On génère les buffers sans superposition
+amgts_focus_buff10b <- buffer_no_overlap(st_transform(amgts_focus, my_crs), 
+                                         group = c("gid", "azimut_amgt")) %>%
+  st_transform(crs = "EPSG:4326")
+
+map3 <- tm_shape(amgts_focus_buff10) + 
+  tm_polygons(col = "blue", alpha = 0.1, legend.show = TRUE) +
+  tm_shape(amgts_focus) + 
+  tm_lines(col = "darkgreen", legend.show = TRUE) +
+  tm_layout(main.title = "Fig. 1.3 Tampons simples",
+            main.title.size = main_title_size)
+
+map4 <- tm_shape(amgts_focus_buff10b) + 
+  tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
+  tm_shape(amgts_focus) + 
+  tm_lines(col = "darkgreen", legend.show = TRUE) +
+  tm_add_legend(type = "line", col = "darkgreen", 
+                labels = "Aménagement",
+                title = "Tracés réels") +
+  tm_add_legend(title = "Zones tampon", 
+                type = "fill", col = "blue", alpha = 0.1, 
+                labels = "Simples") +
+  tm_add_legend(type = "fill", col = "green", alpha = 0.1, 
+                labels = "Contiguës") +
+  tm_layout(main.title = "Fig. 1.4 Tampons contigus",
+            main.title.size = main_title_size, legend.outside = TRUE)
+
+
+freq_focusb <- freqs_focus %>%
+  st_split(amgts_focus_buff10b) %>%
+  st_intersection(amgts_focus_buff10b) 
+
+# A vérifier, pas indispensable
+# freqs_focus_out <- st_difference(freqs_focus, amgts_focus_buff10b)
+
+freq_focusb <- freq_focusb %>%
+  mutate(angle_diff = angle_diff(., angle = azimut_amgt, 
+                                 bidirectional = TRUE))
+
+freq_focus_oblique <- freq_focusb %>%
+  filter(angle_diff > 20 & angle_diff < 160)
+
+freq_focus_in <- freq_focusb %>%
+  filter(angle_diff <= 20 | angle_diff >= 160)
+
+map5 <- tm_shape(amgts_focus_buff10b) + 
+  tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
+  tm_shape(amgts_focus) + 
+  tm_lines(col = "darkgreen", legend.show = TRUE) +
+  tm_shape(freqs_focus) +
+  tm_lines(col = "purple", lwd = 0.7) +
+  tm_shape(freq_focus_oblique) +
+  tm_lines(col = "red") +
+  tm_shape(freq_focus_in) +
+  tm_lines(col = "orange") +
+  tm_layout(main.title = "Fig. 1.5 Sélection des tracés à affecter",
+            main.title.size = main_title_size)
+
+stats_freq_buff <- function(freq_l, inv_buff_s) {
+  freq_inv_buff <- freq_l %>%
+    st_intersection(inv_buff_s) %>% # Etape 1
+    mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
+    rename(geovelo_frequency = frequency) %>%
+    group_by(gid) %>% # Etape 3
+    summarize(facility_frequency = weighted.mean(geovelo_frequency,
+                                                 geovelo_paths_length, 
+                                                 na.rm = TRUE))  %>%
+    st_drop_geometry()
+}
+
+# Etapes 1 à 3
+freq_amgts_focus_buff10b <- freq_focus_in %>%
+  stats_freq_buff(amgts_focus_buff10b)
+
+# Etapes 4 et 5
+freq_amgt_focus <- amgts_focus %>% 
+  left_join(freq_amgts_focus_buff10b, by = "gid") %>%
+  rename(Passages = facility_frequency)
+
+# Map1 simple avec fond de carte
+map6 <- tm_shape(backgound_focus) +
+  tm_rgb() +
+tm_shape(freq_amgt_focus) + 
+  tm_lines(col = "green", lwd = "Passages", scale = 5)+ 
+tm_shape(focus) + 
+  tm_borders() + 
+tm_legend() +
+  tm_layout(main.title = "Fig. 1.6 Aménagements enrichis",
+            main.title.size = main_title_size, legend.outside = TRUE) + 
+  tm_add_legend(type = "line", labels = "Aménagements", col = "green") +
+  tm_add_legend(type = "line", labels = "Hors tampons", col = "purple",
+                title = "Traces Géovélo") +
+  tm_add_legend(type = "line", labels = "Trop obliques", col = "red") + 
+  tm_add_legend(type = "line", labels = "A affecter", col = "orange") 
+
+tmap_arrange(map1, map2, map3, map4, map5, map6, ncol = 2, 
+             widths = c(0.43, 0.57))
+```
+
+## Analyses en fonction de l'aménagement
+
+L'analyse par type d'aménagements sur décompose en deux étapes. Tout d'abord l'établissement de statiques de passages moyens par type d'aménagement pour identifier si la typologie des aménagements indique une différence. Ensuite, analyser la variabilité au sein de chaque catégorie d'aménagement afin d'identifier les aménagements présentant un faible niveau de protection qui sont les plus fréquentés, ou, au contraire, ceux offrant le plus haut niveau de protection mais qui sont peu fréquentés.
+
+# Résultats
+
+## Fréquentation cycliste moyenne par type d'équipement
+
+```{r eval=FALSE, include=FALSE}
+buffer_distances <- 10 # On simplifie, mais ça peut être c(5, 10, 15, 20)
+
+for (i in 1:length(buffer_distances)) {
+  output_filename <- paste0("amgt_buff_", 
+                            buffer_distances[i], 
+                            "m_contigus")
+  input_path <- paste0(loc_geovelo, output_filename) 
+  output_path <- paste0("temp/", output_filename)
+  if (!file.exists(paste0(input_path, ".zip"))) {
+    time_start <- Sys.time()
+    # On applique donc à l'ensemble des aménagements
+    buffered_no_overlap <- amgts %>%
+      st_transform(my_crs) %>%
+      buffer_no_overlap(group = c("gid", "azimut_amgt"),
+                        dist = set_units(buffer_distances[i], m), # buffer distance
+                        density = units::set_units(1, m)) # density of points
+    
+    time_end <- Sys.time()
+    duration_voro_buffer <- time_end - time_start
+    st_write(buffered_no_overlap, paste0(output_path, ".shp"))
+    print(output_filename)
+    print(duration_voro_buffer)
+    # Les temps de traitements prennent entre 3 et 8h par jeu de données
+    # A tester
+    zip(zipfile = paste0(input_path, ".zip"), 
+        files = list.files(pattern = output_path))
+    rm(buffered_no_overlap)
+    
+    if (Sys.info()[['user']] == "rstudio") {
+      library(aws.s3)
+      bucket <- arrow::s3_bucket("minio.lab.sspcloud.fr/fbedecarrats", 
+                                 region = "",
+                                 access_key = Sys.getenv("AWS_ACCESS_KEY_ID"),
+                                 secret_key = Sys.getenv("AWS_SECRET_ACCESS_KEY"))
+      object.copy(bucket = bucket,
+                  from_object = paste0(input_path, ".zip"))
+    }
+    
+  } 
+}
+  
+  for (i in 1:length(buffer_distances)) {
+    unzip(paste0(output_path, ".zip"), exdir = "temp")
+    temp <- st_read(paste0("temp/", output_filename, ".shp"),
+                    quiet = TRUE)
+    st_crs(temp) <- my_crs
+    assign(paste0("amgt_buff_", buffer_distances[i], "m"), temp)
+    rm(temp)
+  }
+}
+
+
+
+# Paramètres à modifier si besoin
+reference_file <- "amenagements_cyclables_NM_freqs_Geovelo_essai_03"
+ref_file_crs <- "EPSG:3947"
+# La suite prend le fichier s'il existe ou le génère à nouveau
+ref_file_path <- paste0("data/Geovelo/", reference_file, ".zip")
+
+if (file.exists(ref_file_path)) {
+  unzip(ref_file_path, exdir = "temp")
+  freq_inv_all  <- st_read(paste0("temp/", reference_file, ".shp"),
+                    quiet = TRUE)
+    st_crs(freq_inv_all) <- ref_file_crs
+    freq_inv_all <- st_transform(freq_inv_all, my_crs)
+} else {
+  # Etapes 1 à 3
+  freq_inv_buff_10m <- freq_axes_2021 %>%
+    stats_freq_buff(inv_buff_10m)
+
+  # Etapes 4 et 5
+  freq_inv_all <- nm_inv %>%
+    left_join(freq_inv_buff_10m, by = "gid")
+
+  # On exporte le fichier en shapefile
+  freq_inv_all %>%
+    st_transform("EPSG:3947") %>%
+    select(-geo_point_2d) %>%
+    st_write(paste0(reference_file, ".shp"))
+
+  # On enregistre le tout en zip dans le dossier data
+  zip(ref_file_path, c(paste0(reference_file, ".shp"),
+                       paste0(reference_file, ".dbf"),
+                       paste0(reference_file, ".prj"),
+                       paste0(reference_file, ".shx")))
+      
+}
+
+
+stats_inv <- freq_inv_all %>%
+  st_drop_geometry() %>%
+  group_by(typ_mng) %>%
+  summarise(`Nombre` = n(),
+            `Longueur totale` = sum(shp_lng),
+            `Moyenne de passages` = mean(fclty_f, na.rm = TRUE),
+            `Moyenne pondérée par la longueur` = 
+              weighted.mean(fclty_f, shp_lng, na.rm = TRUE)) %>%
+  arrange(desc(`Moyenne de passages`))
+
+kable(stats_inv)
+```
+
+
+## Tronçons non aménagés les plus fréquentées par des cyclistes
+
+```{r eval=FALSE, include=FALSE}
+freq_out <- st_difference(freq_axes_2021, inv_buff_10m)
+
+freq_out %>%
+  st_transform("EPSG:3947") %>%
+  select(-geo_point_2d) %>%
+  st_write("frequentations_Geovelo_hors_amenagement.shp")
+```
+
+## Tronçons avec un faible niveau d'aménagement les plus fréquentés
+
+## Tronçons avec un niveau élevé d'équipement les moins fréquentés 
+
+# Discussion
+
+## Utilité pour la prise de décision d'aménagements
+
+## Biais de la donnée
+
+## Complémentarité avec d'autres sources
+
+# Conclusion
+
+
+```{r eval=FALSE, include=FALSE}
+
+# On extrait les azimuts et gid des investissements
+azimuts_inv <- nm_inv %>%
+  st_drop_geometry() %>%
+  select(gid, azimut_amgt)
+
+# On rappartrie l'azimut de l'aménagement dans le buffer correspondant
+inv_buff_10m_focus2 <- inv_buff_10m_focus %>%
+  left_join(azimuts_inv, by = "gid")
+
+parallel_intersects <- function(x, y, angle_tolerance) {
+  st_intesects(x, y) & 
+    (x$azimut_freq >= y$azimut_amgt - angle_tolerance |
+       x$azimut_freq <= y$azimut_amgt + angle_tolerance)
+}
+  
+
+test <- freq_focus %>%
+  st_join()
+  
+  
+    st_intersection(inv_buff_s) %>% # Etape 1
+    mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
+    rename(geovelo_frequency = frequency) %>%
+    group_by(gid) %>% # Etape 3
+    summarize(facility_frequency = weighted.mean(geovelo_frequency,
+                                                 geovelo_paths_length, 
+                                                 na.rm = TRUE))  %>%
+    st_drop_geometry()
+
+
+# Une fonction pour refaire la moyenne de fréquentation par zone tampon
+stats_freq_buff2 <- function(freq_l, inv_buff_s, angle_tolerance = 20) {
+  freq_inv_buff <- freq_l %>%
+    st_intersection(inv_buff_s) %>% # Etape 1
+    mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
+    rename(geovelo_frequency = frequency) %>%
+    group_by(gid) %>% # Etape 3
+    summarize(facility_frequency = weighted.mean(geovelo_frequency,
+                                                 geovelo_paths_length, 
+                                                 na.rm = TRUE))  %>%
+    st_drop_geometry()
+  
+}
+
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# Une fonction pour refaire la moyenne de fréquentation par zone tampon
+stats_freq_buff <- function(freq_l, inv_buff_s) {
+  freq_inv_buff <- freq_l %>%
+    st_intersection(inv_buff_s) %>% # Etape 1
+    mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
+    rename(geovelo_frequency = frequency) %>%
+    group_by(gid) %>% # Etape 3
+    summarize(facility_frequency = weighted.mean(geovelo_frequency,
+                                                 geovelo_paths_length, 
+                                                 na.rm = TRUE))  %>%
+    st_drop_geometry()
+  
+}
+
+# Etapes 1 à 3
+freq_inv_buff_10m_focus <- freq_focus %>%
+  stats_freq_buff(inv_buff_10m_focus)
+
+# Etapes 4 et 5
+freq_inv_focus <- inv_focus %>% 
+  left_join(freq_inv_buff_10m_focus, by = "gid")
+
+# Plot result
+map5 <- tm_shape(inv_buff_10m_focus) + 
+  tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
+tm_shape(freq_inv_focus) + 
+  tm_lines(col = "darkgreen") +
+tm_shape(freq_focus) + 
+  tm_lines(col = "orange") +
+tm_shape(focus) + 
+  tm_borders() # +
+# tm_layout(title= "Données d'aménagements enrichies avec les fréquences de passage")
+
+map5
+```
+
+Les tests visuels sur la carte interactive ci-dessus semblent cohérents. On applique la procédure à l'ensemble des traces et aménagements.
+
+```{r eval, eval=FALSE, include=FALSE}
+# Paramètres à modifier si besoin
+reference_file <- "amenagements_cyclables_NM_freqs_Geovelo_essai_03"
+ref_file_crs <- "EPSG:3947"
+# La suite prend le fichier s'il existe ou le génère à nouveau
+ref_file_path <- paste0("data/Geovelo/", reference_file, ".zip")
+
+if (file.exists(ref_file_path)) {
+  unzip(ref_file_path, exdir = "temp")
+  freq_inv_all  <- st_read(paste0("temp/", reference_file, ".shp"),
+                    quiet = TRUE)
+    st_crs(freq_inv_all) <- ref_file_crs
+    freq_inv_all <- st_transform(freq_inv_all, my_crs)
+} else {
+  # Etapes 1 à 3
+  freq_inv_buff_10m <- freq_axes_2021 %>%
+    stats_freq_buff(inv_buff_10m)
+
+  # Etapes 4 et 5
+  freq_inv_all <- nm_inv %>%
+    left_join(freq_inv_buff_10m, by = "gid")
+
+  # On exporte le fichier en shapefile
+  freq_inv_all %>%
+    st_transform("EPSG:3947") %>%
+    select(-geo_point_2d) %>%
+    st_write(paste0(reference_file, ".shp"))
+
+  # On enregistre le tout en zip dans le dossier data
+  zip(ref_file_path, c(paste0(reference_file, ".shp"),
+                       paste0(reference_file, ".dbf"),
+                       paste0(reference_file, ".prj"),
+                       paste0(reference_file, ".shx")))
+      
+}
+
+```
+
+
+
+
