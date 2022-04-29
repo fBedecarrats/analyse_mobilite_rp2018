@@ -8,7 +8,7 @@ library(ggplot2) # pour les graphs
 library(plotly) # pour des graphs interactifs
 library(ggiraph)
 library(forcats) # pour modifier des facteurs (variables catégorielles ordonnées)
-
+library(shinycssloaders)
 
 # On charge la liste des communes ici plutôt que dans
 EPCI_FR <- read_excel("data/Recensement/Intercommunalite_Metropole_au_01-01-2018.xls", 
@@ -31,20 +31,16 @@ ui <- fluidPage(
                            "Vélo" = "3",
                            "Moto" = "4",
                            "Voiture"="5",
-                           "TC"="6"),
-                         plotlyOutput("distPlot")
-                         
-      )
-      
-    ),
+                           "TC"="6")),
+      actionButton("update", "Valider")),
     
     mainPanel(
       tabsetPanel(
         tabPanel("Carte des flux",
                  textOutput("my_deplacement")),
         tabPanel("Matrice origine/destination", 
-                 girafeOutput("matrice_od_commune_mode",
-                              width = "100%", height = "80%")),
+                 withSpinner(girafeOutput("matrice_od_commune_mode",
+                                          width = "100%", height = "80%"))),
         tabPanel("Histogramme")
       )
     )
@@ -82,10 +78,10 @@ server <- function(input, output) {
   }
   
   
-  flux_epci <- reactive({
+  flux_epci <- eventReactive(input$update, {
     # On récupère l'EPCI sélectionnée dans l'UI
-    my_epci = input$epci
-    # my_epci = "Nantes Métropole"
+    # my_epci = input$epci
+    my_epci = "Nantes Métropole"
     # On liste les communes à garder
     communes <- communes_interco(interco = my_epci)
     
@@ -97,10 +93,14 @@ server <- function(input, output) {
                 by = c("COMMUNE" = "CODGEO")) %>%
       left_join(rename(communes, `Commune de travail` = LIBGEO), 
                 by = c("DCLT" = "CODGEO")) 
+  })
+  # Cet objet est "réactif" : il va créer un rendu qui se mettra à jour
+  # dès qu'un élément qui le compose est modifié.
+  output$matrice_od_commune_mode <- renderGirafe({
     
     # On affiche les commune par ordre décroissant de flux : ça nous servira
     # à ordonner l'affichage des communes sur le graph
-    ordre_communes <- flux_epci %>%
+    ordre_communes <- flux_epci() %>%
       group_by(`Commune de résidence`) %>%
       summarize(flux = sum(IPONDI, na.rm = TRUE)) %>%
       arrange(desc(flux)) %>%
@@ -109,25 +109,23 @@ server <- function(input, output) {
     
     # L'ordre est passée en transformant le libellé des communes en une variable
     # catégorielle ordonnée ("factor" dans R, ce qu'on appelle "domaines" dans Argis)
-    flux_epci <- flux_epci %>%
+    flux_epci <- flux_epci() %>%
       mutate(`Commune de résidence` = factor(`Commune de résidence`,
                                              levels = ordre_communes),
              `Commune de travail` = factor(`Commune de travail`,
                                            levels = ordre_communes)) 
-    return(flux_epci)
-  })
   
   # Cet objet est "réactif" : il va créer un rendu qui se mettra à jour
   # dès qu'un élément qui le compose est modifié.
-  output$matrice_od_commune_mode <- renderGirafe({
+  # output$matrice_od_commune_mode <- renderGirafe({
     
-    intermediaire_total <- flux_epci() %>% # on enlève le mode du group_by
+    intermediaire_total <- flux_epci %>% # on enlève le mode du group_by
       group_by(`Commune de résidence`, `Commune de travail`) %>%
       summarise(`Flux total par paire de communes` = sum(IPONDI, na.rm = TRUE))
     
     # Cette étape est factultative mais fait gagner ~2secondes de traitement
     # car dplyr est un peu plus rapide que ggplot2
-    intermediaire <- flux_epci() %>%
+    intermediaire <- flux_epci %>%
       group_by(`Mode de transport`, `Commune de résidence`, `Commune de travail`) %>%
       summarise(`Flux domicile-travail` = sum(IPONDI, na.rm = TRUE)) %>%
       left_join(intermediaire_total, by = c("Commune de résidence", 
