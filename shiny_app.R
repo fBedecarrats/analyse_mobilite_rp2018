@@ -8,6 +8,11 @@ library(ggplot2) # pour les graphs
 library(plotly) # pour des graphs interactifs
 library(ggiraph)
 library(forcats) # pour modifier des facteurs (variables catégorielles ordonnées)
+library(shinycssloaders)
+library(sf) # gère les objets spatiaux, cf. https://geocompr.robinlovelace.net
+library(stplanr)
+library(tmap) # pour les cartes
+library(purrr)
 
 
 # On charge la liste des communes ici plutôt que dans
@@ -31,20 +36,16 @@ ui <- fluidPage(
                            "Vélo" = "3",
                            "Moto" = "4",
                            "Voiture"="5",
-                           "TC"="6"),
-                         plotlyOutput("distPlot")
-                         
-      )
-      
-    ),
+                           "TC"="6")),
+      actionButton("update", "Valider")),
     
     mainPanel(
       tabsetPanel(
         tabPanel("Carte des flux",
                  textOutput("my_deplacement")),
         tabPanel("Matrice origine/destination", 
-                 girafeOutput("matrice_od_commune_mode",
-                              width = "100%", height = "80%")),
+                 withSpinner(girafeOutput("matrice_od_commune_mode",
+                                          width = "100%", height = "80%"))),
         tabPanel("Histogramme")
       )
     )
@@ -80,15 +81,22 @@ server <- function(input, output) {
       filter(LIBEPCI == interco) %>%
       select(CODGEO, LIBGEO)
   }
+
+my_communes <- eventReactive(input$update, {
+  # On récupère l'EPCI sélectionnée dans l'UI
   
+  my_epci = input$epci
+  # my_epci = "Nantes Métropole"
+  
+  # On liste les communes à garder
+  communes <- communes_interco(interco = my_epci)
+  return(communes)
+})  
+
   
   flux_epci <- reactive({
-    # On récupère l'EPCI sélectionnée dans l'UI
-    my_epci = input$epci
-    # my_epci = "Nantes Métropole"
-    # On liste les communes à garder
-    communes <- communes_interco(interco = my_epci)
     
+    communes <- my_communes()
     # On filtre la donnée de flux pour ne garder que ces communes
     flux_epci <- flux %>%
       filter(COMMUNE %in% communes$CODGEO | DCLT %in% communes$CODGEO) %>%
@@ -97,10 +105,14 @@ server <- function(input, output) {
                 by = c("COMMUNE" = "CODGEO")) %>%
       left_join(rename(communes, `Commune de travail` = LIBGEO), 
                 by = c("DCLT" = "CODGEO")) 
+  })
+  # Cet objet est "réactif" : il va créer un rendu qui se mettra à jour
+  # dès qu'un élément qui le compose est modifié.
+  output$matrice_od_commune_mode <- renderGirafe({
     
     # On affiche les commune par ordre décroissant de flux : ça nous servira
     # à ordonner l'affichage des communes sur le graph
-    ordre_communes <- flux_epci %>%
+    ordre_communes <- flux_epci() %>%
       group_by(`Commune de résidence`) %>%
       summarize(flux = sum(IPONDI, na.rm = TRUE)) %>%
       arrange(desc(flux)) %>%
@@ -109,25 +121,23 @@ server <- function(input, output) {
     
     # L'ordre est passée en transformant le libellé des communes en une variable
     # catégorielle ordonnée ("factor" dans R, ce qu'on appelle "domaines" dans Argis)
-    flux_epci <- flux_epci %>%
+    flux_epci <- flux_epci() %>%
       mutate(`Commune de résidence` = factor(`Commune de résidence`,
                                              levels = ordre_communes),
              `Commune de travail` = factor(`Commune de travail`,
                                            levels = ordre_communes)) 
-    return(flux_epci)
-  })
   
   # Cet objet est "réactif" : il va créer un rendu qui se mettra à jour
   # dès qu'un élément qui le compose est modifié.
-  output$matrice_od_commune_mode <- renderGirafe({
+  # output$matrice_od_commune_mode <- renderGirafe({
     
-    intermediaire_total <- flux_epci() %>% # on enlève le mode du group_by
+    intermediaire_total <- flux_epci %>% # on enlève le mode du group_by
       group_by(`Commune de résidence`, `Commune de travail`) %>%
       summarise(`Flux total par paire de communes` = sum(IPONDI, na.rm = TRUE))
     
     # Cette étape est factultative mais fait gagner ~2secondes de traitement
     # car dplyr est un peu plus rapide que ggplot2
-    intermediaire <- flux_epci() %>%
+    intermediaire <- flux_epci %>%
       group_by(`Mode de transport`, `Commune de résidence`, `Commune de travail`) %>%
       summarise(`Flux domicile-travail` = sum(IPONDI, na.rm = TRUE)) %>%
       left_join(intermediaire_total, by = c("Commune de résidence", 
@@ -161,6 +171,82 @@ server <- function(input, output) {
 
   })
   
+  # Création de cartes ------------------------------------------------------
+  
+  # Ce qui suit est largement repris de : https://geocompr.robinlovelace.net/transport.html
+  
+  # On va requêter l'API des découpages communaux 
+  # https://geo.api.gouv.fr/decoupage-administratif/communes
+  
+  # On crée une fonction qui prend en entrée une liste de numéros de communes et 
+  # un type de géographie et qui renvoie le geojson correspondant
+  # cf. https://api.gouv.fr/documentation/api-geo
+  get_communes <- function(x, geo = c("centre", "contour")) {
+    paste0("https://geo.api.gouv.fr/communes/",x,"?fields=", geo) %>% # forme la requête
+      read_sf()
+  }
+  
+  
+  # On récupère le centre des communes 
+  centres_communes_p <- map_df(my_communes()$CODGEO, get_communes, "centre") %>%
+    bind_cols(select(my_communes(), LIBGEO)) %>% # on leur rattache leur nom
+    # la fonction od2line requiert que le champ identifiant soit le premier à gauche
+    relocate(LIBGEO, .before = geometry) 
+  
+  # On calcule les flux entre chaque paire de communes
+  # d'abord avec 1 ligne par type de mode de transport (vélo, voiture...)
+  mobpro_od <- flux_epci() %>%
+    group_by(`Commune de résidence`, `Commune de travail`, `Mode de transport`) %>%
+    summarise(trajets = sum(IPONDI, na.rm = TRUE)) %>%
+    # on passe les modes en colonnes pour n'avoir plus qu'1 ligne par paire de communes
+    pivot_wider(names_from = `Mode de transport`, values_from = trajets)
+  
+  # On calcule les totaux (on pourrait le faire à partir des modes, 
+  # mais ça marche aussi comme ça)
+  mobpro_od <- flux_epci() %>%
+    group_by(`Commune de résidence`, `Commune de travail`) %>% # sans mode de transport
+    summarise(total = sum(IPONDI, na.rm = TRUE)) %>%
+    right_join(mobpro_od, by = c("Commune de résidence", "Commune de travail"))
+  
+  # On exclut les communes extérieures à l'EPCI (pas de géométrie)
+  # et les flux où on a la même commune en domicile-travail.
+  mobpro_od <- mobpro_od %>%
+    filter(!is.na(`Commune de résidence`) & !is.na(`Commune de travail`)) %>%
+    filter(`Commune de résidence` != `Commune de travail`) %>%
+    # On passe les noms de communes de facteur à caractère pour permettre la jointure
+    mutate(`Commune de résidence` = as.character(`Commune de résidence`),
+           `Commune de travail` = as.character(`Commune de travail`))
+  
+  # On utilise la fonction du od2line du package stplanr
+  # A lire : https://docs.ropensci.org/stplanr/
+  mobpro_od_2l <- od2line(flow = mobpro_od, zones = centres_communes_p)
+  
+  # Cette matrice est bidirectionnelles : le flux Nantes-Rezé se supperpose au 
+  # flux Rezé-Nantes. On va cumuler les flux en utilisant la fonction od_oneway
+  # puis calculer des agrégats en rassemblant les modes de transports d'intérêt
+  mobpro_od_1l <- mobpro_od_2l %>%
+    od_oneway() %>%
+    mutate(`Modes actifs (sans TC)` = rowSums(cbind(`Vélo`, Marche), na.rm = TRUE) / total,
+           `Modes durables (avec TC)` = rowSums(cbind(`Vélo`, Marche, TC), na.rm = TRUE) / total)
+  
+  
+  # Ces cartes sont plus jolies à regarder avec un fond, en mode "view"
+  #tmap_mode("view")
+  tm_shape(mobpro_od_1l) +
+    tm_lines(palette = viridis::plasma(10),
+             lwd = "total",
+             breaks = c(0:5)/10,
+             scale = 9,
+             title.lwd = "Nombre de trajets",
+             alpha = 1,
+             col ="Modes durables (avec TC)", 
+             text.separator = "-",
+             title = "Part modale") +
+    tm_layout(legend.format=list(fun=function(x) ifelse(x > 1, x,
+                                                        paste0(formatC(x*100, digits=0, format="f"), " %")),
+                                 text.separator = "-"),
+              legend.outside = TRUE)
+    
 }
 
 # On force l'application à s'exécuter dans le navigateur web 
