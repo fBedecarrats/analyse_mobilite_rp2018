@@ -331,20 +331,25 @@ for (i in 1:length(buffer_distances)) {
     print(output_filename)
     print(duration_voro_buffer)
     # Les temps de traitements prennent entre 3 et 8h par jeu de données
+    # 5h30 pour le dernier batch à 10m.
     # A tester
-    zip(zipfile = paste0(input_path, ".zip"), 
-        files = list.files(pattern = output_path))
-    rm(buffered_no_overlap)
-    
-    if (Sys.info()[['user']] == "rstudio") {
-      library(aws.s3)
-      bucket <- arrow::s3_bucket("minio.lab.sspcloud.fr/fbedecarrats", 
-                                 region = "",
-                                 access_key = Sys.getenv("AWS_ACCESS_KEY_ID"),
-                                 secret_key = Sys.getenv("AWS_SECRET_ACCESS_KEY"))
-      object.copy(bucket = bucket,
-                  from_object = paste0(input_path, ".zip"))
-    }
+    setwd("./temp")
+    zip(zipfile = paste0(output_filename, ".zip"), 
+        files = list.files(pattern = output_filename))
+    setwd("../")
+    file.copy(from = paste0("temp/", output_filename, ".zip"),
+              to = paste0("data/Geovelo/", output_filename, ".zip"))
+    # rm(buffered_no_overlap)
+### Ne fonctionne pas :    
+    # if (Sys.info()[['user']] == "rstudio") {
+    #   library(aws.s3)
+    #   bucket <- arrow::s3_bucket("minio.lab.sspcloud.fr/", 
+    #                              region = "",
+    #                              access_key =  Sys.getenv("AWS_ACCESS_KEY_ID"),
+    #                              secret_key = Sys.getenv("AWS_SECRET_ACCESS_KEY"))
+    #   object.copy(bucket = bucket,
+    #               from_object = paste0(input_path, ".zip"))
+    # }
     
   } 
 }
