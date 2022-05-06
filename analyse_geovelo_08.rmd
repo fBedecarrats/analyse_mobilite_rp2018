@@ -36,7 +36,7 @@ my_crs <- "EPSG:3947"
 
 # Introduction
 
-La pratique du vélo constitue un enjeu de politique publique important. Elle répond à une demande de mobilité des populations et son essor contribue à la réduction des émissions de gaz à effet de serre et à l'activité physique, en évitant de contribuer à certaines nuisances associées aux modes de transport motorisés (bruit, qualité de l'air, emprise sur l'espace public, congestion). Les collectivités locales disposent de plusieurs moyens d'action pour favoriser la pratique du vélo, en particulier l'aménagement cyclable, c'est-à-dire la création, l'amélioration et la maintenance de dispositifs de voirie organisant la circulation et le stationnement des vélos. 
+La pratique du vélo constitue un enjeu de politique publique important. Elle répond à une demande de mobilité des populations et son essor contribue à la réduction des émissions de gaz à effet de serre et à l'activité physique, en évitant de contribuer à certaines nuisances associées aux modes de transport motorisés (bruit, qualité de l'air, emprise sur l'espace public, congestion). Les collectivités locales disposent d'une palette moyens d'action pour favoriser la pratique du vélo, en particulier l'aménagement cyclable, c'est-à-dire la création, l'amélioration et la maintenance de dispositifs de voirie organisant la circulation et le stationnement des vélos. 
 
 Plusieurs considérations président aux aménagements cyclables : leur localisation et interconnexion, le niveau de séparation qu'ils établissent avec les autres modes de déplacement et les autres usages de l'espace public au détriment desquels ils s'instaurent (une piste cyclable implique souvent de supprimer des places de parking, de rétrécir les voies dévolues à la circulation des voitures ou des piétons). Différentes sources d'informations peuvent être mobilisées par les collectivités locales pour orienter leurs stratégies d'aménagement cyclables :
 
@@ -81,29 +81,13 @@ amgts <- paste0(loc_geovelo, amgts_file) %>%
 
 ## Affectation des traces géovélo aux aménagements
 
-On crée une routine permettant de focaliser sur une zone spécifique afin de visualiser les aménagements cyclables (en vert) et les fréquentations d'itinéraires relevées par Géovélo (en orange) à une échelle où peut visuellement en vérifier la cohérence.  On observe ici qu'il y a un décalage entre la localisation des aménagements et celles des traces Geovélo. 
+On crée une routine permettant de focaliser sur une zone spécifique afin de visualiser les aménagements cyclables (en vert) et les fréquentations d'itinéraires relevées par Géovélo (en orange) à une échelle où peut visuellement en vérifier la cohérence.  On observe sur la figure 1.1 qu'il y a un décalage entre la localisation des aménagements et celles des traces Geovélo. La figure 1.2 reproduit les mêmes éléments, mais en représentant le tracé des itinéraires Géovélo avec une épaisseur proportionnelle au nombre de passages relevés.
 
-Pour attribuer aux aménagements les fréquentations itinéraires relevées par Géovélo, on constitue des zones tampon autour de des aménagements et on considère que les itinéraires Géovélo qui traversent ces zones tampons transitent par l'aménagement. Un pemier essai avec de constitution de tampons "simples" avec une distance de 10 mètres.
+Pour attribuer aux aménagements les fréquentations itinéraires relevées par Géovélo, on constitue des zones tampon autour de des aménagements et on considère que les itinéraires Géovélo qui traversent ces zones tampons transitent par l'aménagement. La figure 1.3 représente un pemier essai avec de constitution de tampons "simples" avec une distance de 10 mètres.
 
-On constate que ces tampons se superposent. Cela entraîne des difficultés d'assignation des itinéraires Géovélo qui se situeraient sur une aire de superposition entre deux zones tampon d'aménagements différents : à quel aménagements les assigner dans ces cas ? Par défaut, elles seraient comptabilisées deux fois. Cette situation serait particulièrement problématiques aux carrefours, où les traces seraient comptabilisées un grand nombre de fois. 
+On constate que ces tampons "simples" se superposent. Cela entraîne dans les zones de recouvrement une assignation d'un itinéraire Géovélo à plusieurs zones tampon et donc à plusieurs aménagements. Cette situation est problématiques, notamment aux carrefours où une même trace serait comptabilisées plusieurs fois. 
 
-On définit donc une méthode permettant de générer des tampons qui ne se superposent pas. Elle s'appuient sur la constitution de diagrammes de Voronoï. Cette procédure est très gourmande/chronophage en termes de calcul, car les diagrammes de Voronoï prennent comme référence des points et pas des lignes. Ici on doit décomposer chaque ligne en une série de points rapprochés, pour ensuite fusionner les polygonnes du diagramme de Voronoï appartenant à une même ligne. 
-
-On a bien maintenant des polygones qui ne se recoupent pas et à l'intérieur desquels on va pouvoir affecter les traces Géovélo.
-On s'appuie donc maintenant sur les zones tamon non superposées pour affecter les traces Géovélo.
-- Le filaire d'aménagements, qui contiennent une donnée riche sur ces derniers : identifiant et type d'aménagement ; 
-- Les zones tampons autour des aménagements, qui gardent un identifiant commun avec l'aménagement à partir duquel elles ont été générés ;
-- Les traces Géovélo, qui contiennent une statistique de passage.
-On visualise d'abord les traces géographiques disponibles.
-
-
-La procédure d'appariement entre les traces Géovélo et les aménagements peut être réalisée de la sorte :  
-
-1. resegmentation des itinéraires Géovélo pour que les segments se situent dans les zones tampons d'aménagement et report de l'identifiant de l'aménagement correspondant dans les attributs du segment de l'itinéraire Géovélo  ;
-2. Pour chaque segment Géovélo associé à une zone tampon, calculer la longueur se situant dans la zone tampon de l'aménagement ;
-3. Pour chaque zone tampon on réalise la moyenne des fréquences de fréquentation des itinéraires Géovélo captés, en pondérant cette moyenne par la longueur des segments d'itinéraire capté (la pondération permet de limiter l'incidence des segments adjacents non équipés qui croisent la zone tampon de l'aménagement) ; 
-4. Report des sommes réalisées en 3. vers les aménagements associés ;
-5. Pour chaque aménagement, diviser le produit calculé à l'étape 2. et sommé à l'étape 3 par la longueur de l'aménagement associé.
+On définit donc une méthode permettant de générer des tampons contigus, c'est-à-dire qui ne se superposent pas. La méthode s'appuie sur la constitution de diagrammes de Voronoï [référence]. Cette procédure est exigentes en termes de calcul, car les diagrammes de Voronoï prennent comme référence des points et pas des lignes. Ici on doit décomposer chaque ligne en une série de points rapprochés, pour ensuite fusionner les polygonnes du diagramme de Voronoï appartenant à une même ligne (figure 1.4). 
 
 ### Fig.1 : Illustration des étapes de traitement pour l'affectation des traces Géovélo aux aménagements
 
@@ -146,13 +130,13 @@ tm_legend() +
   tm_layout(main.title = "Fig. 1.1 Tracés simples en contexte",
             main.title.size = main_title_size )
 # Map2 with lines proportional to frequency
-map2 <- tm_shape(amgts_focus) + 
-  tm_lines(col = "green")+ 
-tm_shape(rename(freqs_focus, `Passages` = frequency)) + 
+map2 <- tm_shape(rename(freqs_focus, `Passages` = frequency)) + 
   tm_lines(col = "orange", lwd = "Passages", scale = 5) + 
-tm_shape(focus) + 
+  tm_shape(amgts_focus) + 
+  tm_lines(col = "green")+ 
+  tm_shape(focus) + 
   tm_borders() + 
-tm_layout(main.title = "Fig. 1.2 Tracés proportionels aux passages",
+  tm_layout(main.title = "Fig. 1.2 Tracés proportionels aux passages",
             main.title.size = main_title_size , legend.outside = TRUE)  +
   tm_add_legend(type = "line", labels = "Aménagements", col = "green", 
                 title = "Type de tracé") +
@@ -208,14 +192,18 @@ amgts_focus_buff10b <- buffer_no_overlap(st_transform(amgts_focus, my_crs),
 map3 <- tm_shape(amgts_focus_buff10) + 
   tm_polygons(col = "blue", alpha = 0.1, legend.show = TRUE) +
   tm_shape(amgts_focus) + 
-  tm_lines(col = "darkgreen", legend.show = TRUE) +
+  tm_lines(col = "darkgreen", legend.show = TRUE) + 
+  tm_shape(focus) + 
+  tm_borders() +
   tm_layout(main.title = "Fig. 1.3 Tampons simples",
             main.title.size = main_title_size)
 
 map4 <- tm_shape(amgts_focus_buff10b) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
   tm_shape(amgts_focus) + 
-  tm_lines(col = "darkgreen", legend.show = TRUE) +
+  tm_lines(col = "darkgreen", legend.show = TRUE) + 
+  tm_shape(focus) + 
+  tm_borders() +
   tm_add_legend(type = "line", col = "darkgreen", 
                 labels = "Aménagement",
                 title = "Tracés réels") +
@@ -232,9 +220,6 @@ freq_focusb <- freqs_focus %>%
   st_split(amgts_focus_buff10b) %>%
   st_intersection(amgts_focus_buff10b) 
 
-# A vérifier, pas indispensable
-# freqs_focus_out <- st_difference(freqs_focus, amgts_focus_buff10b)
-
 freq_focusb <- freq_focusb %>%
   mutate(angle_diff = angle_diff(., angle = azimut_amgt, 
                                  bidirectional = TRUE))
@@ -245,6 +230,20 @@ freq_focus_oblique <- freq_focusb %>%
 freq_focus_in <- freq_focusb %>%
   filter(angle_diff <= 20 | angle_diff >= 160)
 
+# On généralise en une fonction pour la suite
+prepare_freq <- function(frequencies, buffers, angle_diff = 20) {
+  frequenciesb <- frequencies %>%
+  st_split(buffers) %>%
+  st_intersection(buffers) 
+
+frequenciesb <- frequenciesb %>%
+  mutate(angle_diff = angle_diff(., angle = azimut_amgt, 
+                                 bidirectional = TRUE))
+
+frequenciesb %>%
+  filter(angle_diff <= angle_diff | angle_diff >= 180 - angle_diff)
+}
+
 map5 <- tm_shape(amgts_focus_buff10b) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
   tm_shape(amgts_focus) + 
@@ -254,7 +253,9 @@ map5 <- tm_shape(amgts_focus_buff10b) +
   tm_shape(freq_focus_oblique) +
   tm_lines(col = "red") +
   tm_shape(freq_focus_in) +
-  tm_lines(col = "orange") +
+  tm_lines(col = "orange") + 
+  tm_shape(focus) + 
+  tm_borders() +
   tm_layout(main.title = "Fig. 1.5 Sélection des tracés à affecter",
             main.title.size = main_title_size)
 
@@ -263,27 +264,33 @@ stats_freq_buff <- function(freq_l, inv_buff_s) {
     st_intersection(inv_buff_s) %>% # Etape 1
     mutate(geovelo_paths_length = as.numeric(st_length(.))) %>%
     rename(geovelo_frequency = frequency) %>%
+    mutate(gv_prod_len_freq = geovelo_paths_length * geovelo_frequency) %>%
     group_by(gid) %>% # Etape 3
-    summarize(facility_frequency = weighted.mean(geovelo_frequency,
-                                                 geovelo_paths_length, 
-                                                 na.rm = TRUE))  %>%
+    summarize(facility_sum_prod_len_freq = sum(gv_prod_len_freq, 
+                                               na.rm = TRUE))  %>%
     st_drop_geometry()
 }
 
-# Etapes 1 à 3
-freq_amgts_focus_buff10b <- freq_focus_in %>%
-  stats_freq_buff(amgts_focus_buff10b)
+summarise_freq <- function(frequencies, buffers, facilities) {
+  
+freq_per_buffers <- frequencies %>%
+  stats_freq_buff(buffers)
 
-# Etapes 4 et 5
-freq_amgt_focus <- amgts_focus %>% 
-  left_join(freq_amgts_focus_buff10b, by = "gid") %>%
+facilities %>% 
+  mutate(facility_length = as.numeric(st_length(.))) %>%
+  left_join(freq_per_buffers, by = "gid") %>%
+  mutate(facility_frequency = facility_sum_prod_len_freq / facility_length) %>%
   rename(Passages = facility_frequency)
+}
 
-# Map1 simple avec fond de carte
+freq_amgt_focus <- summarise_freq(frequencies = freq_focus_in,
+                                  buffers = amgts_focus_buff10b,
+                                  facilities = amgts_focus)
+
 map6 <- tm_shape(backgound_focus) +
   tm_rgb() +
 tm_shape(freq_amgt_focus) + 
-  tm_lines(col = "green", lwd = "Passages", scale = 5)+ 
+  tm_lines(col = "green", lwd = "Passages", scale = 5) + 
 tm_shape(focus) + 
   tm_borders() + 
 tm_legend() +
@@ -298,6 +305,22 @@ tm_legend() +
 tmap_arrange(map1, map2, map3, map4, map5, map6, ncol = 2, 
              widths = c(0.43, 0.57))
 ```
+
+On a bien maintenant des polygones qui ne se recoupent pas et à l'intérieur desquels on va pouvoir affecter les traces Géovélo.
+On s'appuie donc maintenant sur les zones tamon non superposées pour affecter les traces Géovélo.
+- Le filaire d'aménagements, qui contiennent une donnée riche sur ces derniers : identifiant et type d'aménagement ; 
+- Les zones tampons autour des aménagements, qui gardent un identifiant commun avec l'aménagement à partir duquel elles ont été générés ;
+- Les traces Géovélo, qui contiennent une statistique de passage.
+
+
+La procédure d'appariement entre les traces Géovélo et les aménagements peut être réalisée de la sorte :  
+
+1. On resegmente les itinéraires Géovélo à l'intersection des zones tampons pour que les segments se situent intégralement, soit à l'intérieur, soit à l'extérieur des zones tampons. Lors de cette opération, on reporte l'identifiant de l'aménagement correspondant à la zone tampon dans les attributs du segment de l'itinéraire Géovélo  ;
+2. Pour chaque itinéraire se situant dans la zone tampon d'un aménagement, on calcule le gisement de l'itinéraire, c'est-à-dire son angle par rapport au Nord. On compare ce gisement à celui de l'aménagement correspondant. On associe à la zone tampon  tous les itinéraires présentant un angle inférieur à 20° par rapport à l'orientation de l'aménagement ;
+3. Pour chaque segment d'itinéraire Géovélo associé à une zone tampon, on calcule le produit de la fréquence des passages relevés sur l'itinéraire Géovélo et de la longueur du segment ;
+4. Pour chaque zone tampon on réalise la somme des produits calculés à l'étape 3 ; 
+5. On reporte les sommes réalisées en 4. vers les aménagements associés ;
+6. Pour chaque aménagement, on divise le produit calculé à l'étape 4 par la longueur de l'aménagement. 
 
 ## Analyses en fonction de l'aménagement
 
@@ -354,55 +377,25 @@ for (i in 1:length(buffer_distances)) {
   } 
 }
   
-  for (i in 1:length(buffer_distances)) {
-    unzip(paste0(output_path, ".zip"), exdir = "temp")
-    temp <- st_read(paste0("temp/", output_filename, ".shp"),
-                    quiet = TRUE)
-    st_crs(temp) <- my_crs
-    assign(paste0("amgt_buff_", buffer_distances[i], "m"), temp)
-    rm(temp)
-  }
+for (i in 1:length(buffer_distances)) {
+  unzip(paste0("data/Geovelo/", output_filename, ".zip"), exdir = "temp")
+  temp <- st_read(paste0("temp/", output_filename, ".shp"),
+                  quiet = TRUE)
+  st_crs(temp) <- my_crs
+  assign(paste0("amgt_buff_", buffer_distances[i], "m"), temp)
+  rm(temp)
+}
 }
 
+freq_in <- prepare_freq(frequencies = freqs, buffers = amgt_buff_10m)
+
+freq_amgt <- summarise_freq(frequencies = freq_in,
+                                  buffers = amgt_buff_10m,
+                                  facilities = amgts)
 
 
-# Paramètres à modifier si besoin
-reference_file <- "amenagements_cyclables_NM_freqs_Geovelo_essai_03"
-ref_file_crs <- "EPSG:3947"
-# La suite prend le fichier s'il existe ou le génère à nouveau
-ref_file_path <- paste0("data/Geovelo/", reference_file, ".zip")
 
-if (file.exists(ref_file_path)) {
-  unzip(ref_file_path, exdir = "temp")
-  freq_inv_all  <- st_read(paste0("temp/", reference_file, ".shp"),
-                    quiet = TRUE)
-    st_crs(freq_inv_all) <- ref_file_crs
-    freq_inv_all <- st_transform(freq_inv_all, my_crs)
-} else {
-  # Etapes 1 à 3
-  freq_inv_buff_10m <- freq_axes_2021 %>%
-    stats_freq_buff(inv_buff_10m)
-
-  # Etapes 4 et 5
-  freq_inv_all <- nm_inv %>%
-    left_join(freq_inv_buff_10m, by = "gid")
-
-  # On exporte le fichier en shapefile
-  freq_inv_all %>%
-    st_transform("EPSG:3947") %>%
-    select(-geo_point_2d) %>%
-    st_write(paste0(reference_file, ".shp"))
-
-  # On enregistre le tout en zip dans le dossier data
-  zip(ref_file_path, c(paste0(reference_file, ".shp"),
-                       paste0(reference_file, ".dbf"),
-                       paste0(reference_file, ".prj"),
-                       paste0(reference_file, ".shx")))
-      
-}
-
-
-stats_inv <- freq_inv_all %>%
+stats_inv <- freq_amgt %>%
   st_drop_geometry() %>%
   group_by(typ_mng) %>%
   summarise(`Nombre` = n(),
