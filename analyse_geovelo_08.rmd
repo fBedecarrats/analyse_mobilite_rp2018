@@ -231,18 +231,23 @@ freq_focus_in <- freq_focusb %>%
   filter(angle_diff <= 20 | angle_diff >= 160)
 
 # On généralise en une fonction pour la suite
-prepare_freq <- function(frequencies, buffers, angle_diff = 20) {
+prepare_freq <- function(frequencies, buffers, angle_max = 20) {
   frequenciesb <- frequencies %>%
-  st_split(buffers) %>%
-  st_intersection(buffers) 
-
-frequenciesb <- frequenciesb %>%
-  mutate(angle_diff = angle_diff(., angle = azimut_amgt, 
-                                 bidirectional = TRUE))
-
-frequenciesb %>%
-  filter(angle_diff <= angle_diff | angle_diff >= 180 - angle_diff)
+    st_split(buffers) %>%
+    st_intersection(buffers) 
+  
+  frequenciesb <- frequenciesb %>%
+    mutate(angle_diff = angle_diff(., angle = azimut_amgt, 
+                                   bidirectional = TRUE))
+  
+  frequencies_in <- frequenciesb %>%
+    filter(angle_diff <= angle_max | angle_diff >= 180 - angle_max)
 }
+
+# # On vérifie que la fonction produit bien le même résultat
+# freq_focus_in2 <- prepare_freq(frequencies = freqs_focus,
+#                                buffers = amgts_focus_buff10b)
+# identical(freq_focus_in, freq_focus_in2)
 
 map5 <- tm_shape(amgts_focus_buff10b) + 
   tm_polygons(col = "green", alpha = 0.1, legend.show = TRUE) +
@@ -385,12 +390,14 @@ for (i in 1:length(buffer_distances)) {
   assign(paste0("amgt_buff_", buffer_distances[i], "m"), temp)
   rm(temp)
 }
-}
 
-freq_in <- prepare_freq(frequencies = freqs, buffers = amgt_buff_10m)
+amgt_buff_10m_wgs <- amgt_buff_10m %>%
+  st_transform(crs = "EPSG:4326")
+freq_in <- prepare_freq(frequencies = freqs, 
+                        buffers = amgt_buff_10m_wgs)
 
 freq_amgt <- summarise_freq(frequencies = freq_in,
-                                  buffers = amgt_buff_10m,
+                                  buffers = amgt_buff_10m_wgs,
                                   facilities = amgts)
 
 
