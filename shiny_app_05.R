@@ -1,6 +1,7 @@
+# reactiveConsole(enabled = TRUE) # A lancer pour exécuter dans la console
+
 # On charge nos librairies
 library(shiny) # Pour faire tourner l'application shiny
-# reactiveConsole(enabled = TRUE)
 library(readxl) # pour lire les fichiers excel (liste communes/epci)
 library(vroom) # pour lire les csv (très rapide pour les 'gros' csv)
 library(dplyr) # pour les manipulation de données
@@ -17,8 +18,13 @@ library(arrow)
 library(waiter)
 
 
+# Pour préparer le jeu de données en entrée
+if (!file.exists("data/Recensement/FD_MOBPRO_2016_2019.parquet")) {
+  source("prep_files.R")
+}
 
-# On charge la liste des communes ici plutôt que dans
+
+# On charge la liste des communes de 2018 (on pourrait en avoir plusieurs verisons)
 EPCI_FR <- read_excel("data/Recensement/Intercommunalite_Metropole_au_01-01-2018.xls", 
                       sheet = "Composition_communale", skip = 5) %>%
   select(LIBEPCI, CODGEO, LIBGEO)
@@ -26,48 +32,40 @@ EPCI_FR <- read_excel("data/Recensement/Intercommunalite_Metropole_au_01-01-2018
 
 ui <- fluidPage(
   autoWaiter(), # Pout avoir des menus d'attente
-  titlePanel("Trajets domicile-travail (Recensement 2018)"),
-  sidebarLayout(
-    sidebarPanel(width = 2,
-      selectInput("epci",
-                  "Choisir une EPCI:",
-                  choices = sort(unique(EPCI_FR$LIBEPCI)),
-                  selected = "Nantes Métropole"),
-      checkboxGroupInput("deplacement",
-                         "Mode de déplacement",
-                         c("Aucun" = "1",
-                           "Marche" = "2",
-                           "Vélo" = "3",
-                           "Moto" = "4",
-                           "Voiture"="5",
-                           "TC"="6"),
-                         plotlyOutput("distPlot")
-                         
-      )
-      
-    ),
+  fluidRow(
+    column(3, titlePanel("Trajets domicile-travail")),
+    # column(2, "Choisir une EPCI"),
+    column(4, helpText(" "),
+           selectInput("epci", "\nChoisir une EPCI", # label = NULL,
+                       choices = sort(unique(EPCI_FR$LIBEPCI)),
+                       selected = "Nantes Métropole")),
+    # column(2, "Année d'analyse"),
+    column(4, helpText(" "),
+           selectInput("annee", "\nAnnée d'analyse", # label = NULL,
+                          choices = 2019:2016,
+                          selected = 2018))),
+  fluidRow(
+    column(12, tabsetPanel(
+      tabPanel("Matrice origine/destination", 
+               plotOutput("matrice_od_commune_mode", height = "800px")),
+      tabPanel("Histogramme par origine", 
+               plotlyOutput("histo", height = "500px")),
+      tabPanel("Carte des flux origine/destination", 
+               sidebarPanel(width = 2,
+                 radioButtons("modes", "Modes pris en compte",
+                              choices = c("Modes durables (avec TC)",
+                                          "Modes actifs (sans TC)"),
+                              selected = "Modes durables (avec TC)")),
+               mainPanel(tmapOutput("map")))))
+  )
+)
     
-    mainPanel(
-      tabsetPanel(
-        tabPanel("Matrice origine/destination", 
-               #  textOutput("click_data"),
-                 plotOutput("matrice_od_commune_mode", height = "650px")),#,
-                            #  click = "plot_click")),
-        tabPanel("Carte des flux",
-                 tmapOutput("map")),
-        tabPanel("Histogramme")
-      )
-    )
-  ))
 
 
-# Define server logic required to draw a histogram
 server <- function(input, output) {
   # Chargement des données
-  # On utilise vroom qui est ~10x plus rapide pour lire de gros fichiers
   # Nouvelle version avec arrow, encore 10x plus rapide
-  
-  flux <- open_dataset("data/Recensement/FD_MOBPRO_2018.parquet")
+  flux <- open_dataset("data/Recensement/FD_MOBPRO_2016_2019.parquet")
   
   # Cette fonction liste les code communes correspondant à une intercommunalité
   # Elle prend les arguments suivants en entrée :
@@ -82,20 +80,20 @@ server <- function(input, output) {
   
   # On liste les communes à garder
   communes <- reactive({ communes_interco(interco = "Nantes Métropole") })
-  # communes <- reactive({ communes_interco(interco = input$epci) })
-  
   
   # On crée une variable réactive avec la matrice origine-destination sélectionnée
   flux_epci <- reactive({ 
-  my_communes <- communes()
-  # On filtre la donnée de flux pour ne garder que ces communes
-  flux %>%
-    filter(COMMUNE %in% my_communes$CODGEO | DCLT %in% my_communes$CODGEO) %>%
-    # On crée des intitulés lisibles: nom de commune au lieu des numéros
-    left_join(rename(my_communes, `Commune de résidence` = LIBGEO), 
-              by = c("COMMUNE" = "CODGEO")) %>%
-    left_join(rename(my_communes, `Commune de travail` = LIBGEO), 
-              by = c("DCLT" = "CODGEO"))
+    my_communes <- communes()
+    # On filtre la donnée de flux pour ne garder que ces communes
+    flux %>%
+      filter(annee == as.numeric("2018")) %>%
+      select(-annee) %>%
+      filter(COMMUNE %in% my_communes$CODGEO | DCLT %in% my_communes$CODGEO) %>%
+      # On crée des intitulés lisibles: nom de commune au lieu des numéros
+      left_join(rename(my_communes, `Commune de résidence` = LIBGEO), 
+                by = c("COMMUNE" = "CODGEO")) %>%
+      left_join(rename(my_communes, `Commune de travail` = LIBGEO), 
+                by = c("DCLT" = "CODGEO"))
   })
 
   intermediaire_total <- reactive({
@@ -160,13 +158,7 @@ server <- function(input, output) {
     static_plot
 
   })
-  
-  # output$click_data <- renderText({
-  #   req(input$plot_click)
-  #   nearPoints(matrice_od_epci(), input$plot_click) %>%
-  #     pull(txt)
-  # })
-  
+
   # Création de cartes ------------------------------------------------------
   
   # Ce qui suit est largement repris de : https://geocompr.robinlovelace.net/transport.html
@@ -197,15 +189,17 @@ server <- function(input, output) {
   # d'abord avec 1 ligne par type de mode de transport (vélo, voiture...)
   mobpro_od <- reactive({
     matrice_od_epci() %>%
-      select(-`Flux total par paire de communes`) %>%
-      collect() %>%
+      select(`Commune de résidence`, `Commune de travail`, `Mode de transport`,
+             `Flux domicile-travail`) %>%
       pivot_wider(names_from = `Mode de transport`, 
                   values_from = `Flux domicile-travail`) %>%
       filter(!is.na(`Commune de résidence`) & !is.na(`Commune de travail`)) %>%
       filter(`Commune de résidence` != `Commune de travail`) %>%
-      mutate(total = rowSums(across(where(is.numeric))))
+      mutate(`Nombre total de trajets` = rowSums(across(where(is.numeric)), 
+                                                 na.rm = TRUE),
+             `Nombre total de trajets` = round(`Nombre total de trajets`))
   })
-  
+
   # On utilise la fonction du od2line du package stplanr
   # A lire : https://docs.ropensci.org/stplanr/
   mobpro_od_2l <- reactive({
@@ -218,28 +212,59 @@ server <- function(input, output) {
   mobpro_od_1l <- reactive({
     mobpro_od_2l() %>%
       od_oneway() %>%
-      mutate(`Modes actifs (sans TC)` = rowSums(cbind(`Vélo`, Marche), na.rm = TRUE) / total,
-             `Modes durables (avec TC)` = rowSums(cbind(`Vélo`, Marche, TC), na.rm = TRUE) / total)
+      mutate(`Modes actifs (sans TC)` = rowSums(cbind(`Vélo`, Marche), 
+                                                na.rm = TRUE) / 
+                                                  `Nombre total de trajets`,
+             `Modes durables (avec TC)` = rowSums(cbind(`Vélo`, Marche, TC), 
+                                                  na.rm = TRUE) / 
+                                                    `Nombre total de trajets`)
   })
   
   # Ces cartes sont plus jolies à regarder avec un fond, en mode "view"
   #tmap_mode("view")
   output$map <- renderTmap({ 
     tm_shape(mobpro_od_1l()) +
-      tm_lines(palette = viridis::plasma(10),
-               lwd = "total",
-               breaks = c(0:5)/10,
+      tm_lines(palette = "RdYlGn", #viridis::plasma(10),
+               lwd = "Nombre total de trajets",
+               breaks = c(0:10)/10,
                scale = 9,
                title.lwd = "Nombre de trajets",
                alpha = 1,
-               col ="Modes durables (avec TC)", 
+               col = input$modes, 
                text.separator = "-",
-               title = "Part modale") # +
-      # tm_layout(legend.format=list(fun=function(x) ifelse(x > 1, x,
-      #                                                     paste0(formatC(x*100, digits=0, format="f"), " %")),
-      #                              text.separator = "-"),
-      #           legend.outside = TRUE)
+               title = "Part modale",
+               legend.lwd.show = FALSE) + # Pas de légende d'épaisseur des lignes encore dispo
+      tm_layout(legend.format=list(fun=function(x) ifelse(x > 1, x,
+                                                          paste0(formatC(x*100, 
+                                                           digits=0, format="f"), 
+                                                           " %")),
+                                   text.separator = "-"),
+                legend.outside = TRUE)
   })
+  
+  output$histo <- renderPlotly({
+    # On représente la matrice origine destination. NB : Tout se passe sur les 4 
+    # premières lignes (facet), la suite n'est que de la mise en forme
+    my_flux <- collect(flux_epci())
+    graph_od_mod <- my_flux %>%
+      count(`Commune de résidence`, `Mode de transport`, wt = IPONDI) %>%
+      right_join(count(my_flux, `Commune de résidence`, wt = IPONDI), 
+                 by = "Commune de résidence") %>%
+      mutate(part_mod = paste("Part modale :", round(n.x / n.y * 100, 1), "%",
+                              "\nTrajets :", round(n.x), "/", round(n.y))) %>%
+      ggplot(aes(x = `Commune de résidence`, weight = n.x,
+                 fill = `Mode de transport`, 
+                 text = part_mod)) + # A ajouter pour les modes de transport
+      geom_bar(position = "fill") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.title.y = element_blank()) +
+      scale_y_continuous(labels = scales::label_percent())
+    # On reproduit le graphique ggplot 'graph_mod' créé plus haut, en le passant
+    # simplement à plotly avec la fonction 'ggplotly'
+    ggplotly(graph_od_mod, tooltip = c("x", "fill", "text"))
+  })
+    
+    
   
 }
 
