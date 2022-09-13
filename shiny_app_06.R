@@ -21,10 +21,11 @@ librairies_requises <- c( # On liste les librairies dont on a besoin
 manquantes <- !(librairies_requises %in% installed.packages())
 # On installe celles qui manquent
 if(any(manquantes)) install.packages(librairies_requises[manquantes])
+# Il faut absolument avoir  arrow à jour
+update.packages(oldPkgs = "arrow", ask = FALSE)
 # On charge toutes les librairies requises
 invisible(lapply(librairies_requises, require, character.only= TRUE))
-# Il faut absolument avoir  arrow à jour
-update.packages(oldPkgs = "arrow")
+
 
 
 # Pour préparer le jeu de données en entrée
