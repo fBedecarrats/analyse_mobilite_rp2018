@@ -12,3 +12,4 @@ temp
 temp/.*
 *.Rmd
 !Sessions_precedentes.Rmd
+/.quarto/

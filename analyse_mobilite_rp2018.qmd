@@ -7,7 +7,6 @@ format:
     toc: true
     toc-location: left
     output-file: index.html
-    output-dir: docs
 editor: visual
 execute:
   warning: false
