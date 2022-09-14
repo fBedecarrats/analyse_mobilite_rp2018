@@ -6,7 +6,8 @@ format:
     code-fold: true
     toc: true
     toc-location: left
-    output-file: docs/index.html
+    output-file: index.html
+    output-dir: docs
 editor: visual
 execute:
   warning: false
