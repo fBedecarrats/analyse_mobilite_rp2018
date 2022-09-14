@@ -185,7 +185,7 @@ A noter, l'emploi de '::' avant une fonction. Cela veut dire qu'on dit à R d'ut
 
 > Exercice : télécharger les flux totaux calculés par l'INSEE pour chaque paire de communes https://www.insee.fr/fr/statistiques/fichier/5393835/base-csv-flux-mobilite-domicile-lieu-travail-2018.zip et vérifier que vous obtenez le même chiffre qu'avec les variables de pondération NB ; lINSEE ne calcule pas le détail par part modale, juste les flux totaux entre 2 communes.
 
-# Construction d'une vue plus complexe
+# Construction de graphiques plus complexes
 
 ## Afficher les parts modales
 
@@ -214,6 +214,8 @@ graph_mod <- flux_nm %>%
 
 > Exercice : produire le même graphique avec la commune de travail
 
+## Facettes pour obtenir des "petits multiples"
+
 On représente la matrice origine destination. NB : Tout se passe sur les 4 premières lignes (facet), la suite n'est que de la mise en forme
 
 ```{r}
@@ -238,7 +240,7 @@ graph_od_mod
 
 > Exercice : ajouter un titre aux axes x et y.
 
-# Graphique interactif
+## Graphique interactif
 
 Il existe différentes manières de créer des graphs interactifs dans R on va ici utiliser plotly, une librairie javascript très populaire
 
@@ -286,6 +288,8 @@ Exercice (très difficile, à garder pour la fin peut-être), passer le graphiqu
 
 Ce qui suit est largement repris de : https://geocompr.robinlovelace.net/transport.html
 
+## Récupération de donnés spatiales
+
 On va requêter l'API des découpages communaux https://geo.api.gouv.fr/decoupage-administratif/communes
 
 On crée une fonction qui prend en entrée une liste de numéros de communes et un type de géographie et qui renvoie le geojson correspondant cf. https://api.gouv.fr/documentation/api-geo
@@ -306,13 +310,15 @@ mobpro_choro_s <- map_df(communes_NM$CODGEO, get_communes, "contour") %>%
 
 ```
 
+## Cartes simples avec {qtm}
+
 Un premier exemple vide
 
 ```{r}
 qtm(mobpro_choro_s)
 ```
 
-# Choroplèthes
+## Choroplèthes
 
 Choroplèthe : est une carte thématique où les aires sont colorées pour caractériser statistiquement un phénomène
 
@@ -348,6 +354,8 @@ qtm(mobpro_choro_s, fill="travail", fill.style = "jenks", legend.outside = TRUE)
 qtm(mobpro_choro_s, fill="travail", fill.style = "fisher", legend.outside = TRUE)
 ```
 
+## Cartes plus élaborées avec {tmap}
+
 plus de détails sur https://geocompr.github.io/post/2019/tmap-color-scales/ On prépare un modèle à la main
 
 ```{r}
@@ -364,7 +372,9 @@ tm_shape(mobpro_choro_s) +
                                text.separator = "-"))
 ```
 
-# Carte de flux
+# Carte de flux origines-destinations
+
+## Préparation des données
 
 On récupère le centre des communes
 
@@ -420,6 +430,8 @@ mobpro_od_1l <- mobpro_od_2l %>%
          `Modes durables (avec TC)` = rowSums(cbind(`Vélo`, Marche, TC), na.rm = TRUE) / total)
 ```
 
+## Cartes statiques avec {tmap}
+
 On représente le résultat
 
 ```{r}
@@ -439,6 +451,8 @@ tm_shape(mobpro_od_1l) +
             text.separator = "-"),
             legend.outside = TRUE)
 ```
+
+## Carte interactive avec {tmap}
 
 Ces cartes sont plus jolies à regarder avec un fond, en mode "view"
 
