@@ -1,42 +1,62 @@
 # library(shiny)
 # reactiveConsole(enabled = TRUE) # A lancer pour exécuter dans la console
 
-librairies_requises <- c( # On liste les librairies dont on a besoin
-  "shiny", # Pour faire tourner l'application shiny
-  "readxl", # pour lire les fichiers excel (liste communes/epci)
-  "vroom", # pour lire les csv (très rapide pour les 'gros' csv)
-  "dplyr", # pour les manipulation de données
-  "tidyr", # Pour les pivots
-  "ggplot2", # pour les graphs
-  "plotly", # pour des graphs interactifs
-  "ggiraph", # Pour des graphs interactifs
-  "forcats", # pour modifier des facteurs (variables catégorielles ordonnées)
-  "sf", # gère les objets spatiaux, cf. https://geocompr.robinlovelace.net
-  "stplanr", # Pour les routes
-  "tmap", # pour les cartes
-  "purrr", # Pour des opérations vectorisées
-  "arrow", # Pour de la lecture performante de fichiers volumineur
-  "waiter") # Pour des animations d'attente
+# On liste les librairies dont on a besoin
+  library(shiny) # Pour faire tourner l'application shiny
+  library(readxl) # pour lire les fichiers excel (liste communes/epci)
+  library(vroom) # pour lire les csv (très rapide pour les 'gros' csv)
+  library(dplyr) # pour les manipulation de données
+  library(tidyr) # Pour les pivots
+  library(ggplot2) # pour les graphs
+  library(plotly) # pour des graphs interactifs
+  library(ggiraph) # Pour des graphs interactifs
+  library(forcats) # pour modifier des facteurs (variables catégorielles ordonnées)
+  library(sf) # gère les objets spatiaux, cf. https://geocompr.robinlovelace.net
+  library(stplanr) # Pour les routes
+  library(tmap) # pour les cartes
+  library(purrr) # Pour des opérations vectorisées
+  library(arrow) # Pour de la lecture performante de fichiers volumineur
+  library(duckdb)# Pour gérer des fichiers plus volumineux que la mémoire (sur shinyapps)
+  library(waiter) # Pour des animations d'attente
 
-# On regarde parmi ces librairies lesquelles ne sont pas installées
-manquantes <- !(librairies_requises %in% installed.packages())
-# On installe celles qui manquent
-if(any(manquantes)) install.packages(librairies_requises[manquantes])
-# Il faut absolument avoir  arrow à jour
-update.packages(oldPkgs = "arrow", ask = FALSE)
-# On charge toutes les librairies requises
-invisible(lapply(librairies_requises, require, character.only= TRUE))
+
+# librairies_requises <- c( # On liste les librairies dont on a besoin
+#   "shiny", # Pour faire tourner l'application shiny
+#   "readxl", # pour lire les fichiers excel (liste communes/epci)
+#   "vroom", # pour lire les csv (très rapide pour les 'gros' csv)
+#   "dplyr", # pour les manipulation de données
+#   "tidyr", # Pour les pivots
+#   "ggplot2", # pour les graphs
+#   "plotly", # pour des graphs interactifs
+#   "ggiraph", # Pour des graphs interactifs
+#   "forcats", # pour modifier des facteurs (variables catégorielles ordonnées)
+#   "sf", # gère les objets spatiaux, cf. https://geocompr.robinlovelace.net
+#   "stplanr", # Pour les routes
+#   "tmap", # pour les cartes
+#   "purrr", # Pour des opérations vectorisées
+#   "arrow", # Pour de la lecture performante de fichiers volumineur
+#   "duckdb", # Pour gérer des fichiers plus volumineux que la mémoire (sur shinyapps)
+#   "waiter") # Pour des animations d'attente
+# 
+# # On regarde parmi ces librairies lesquelles ne sont pas installées
+# manquantes <- !(librairies_requises %in% installed.packages())
+# # On installe celles qui manquent
+# if(any(manquantes)) install.packages(librairies_requises[manquantes])
+# # Il faut absolument avoir  arrow à jour
+# update.packages(oldPkgs = c("arrow", "duckdb"), ask = FALSE)
+# # On charge toutes les librairies requises
+# invisible(lapply(librairies_requises, require, character.only= TRUE))
 
 
 
 # Pour préparer le jeu de données en entrée
-if (!file.exists("data/Recensement/FD_MOBPRO_2016_2019.parquet")) {
+if (!file.exists("FD_MOBPRO_2016_2019.parquet")) {
   source("prep_files.R")
 }
 
 
 # On charge la liste des communes de 2018 (on pourrait en avoir plusieurs verisons)
-EPCI_FR <- read_excel("data/Recensement/Intercommunalite_Metropole_au_01-01-2018.xls", 
+EPCI_FR <- read_excel("Intercommunalite_Metropole_au_01-01-2019.xls", 
                       sheet = "Composition_communale", skip = 5) %>%
   select(LIBEPCI, CODGEO, LIBGEO)
 
@@ -53,7 +73,7 @@ ui <- fluidPage(
     # column(2, "Année d'analyse"),
     column(4, helpText(" "),
            selectInput("annee", "\nAnnée d'analyse", # label = NULL,
-                          choices = 2019:2016,
+                          choices = 2019:2017,
                           selected = 2018))),
   fluidRow(
     column(12, tabsetPanel(
@@ -76,7 +96,8 @@ ui <- fluidPage(
 server <- function(input, output) {
   # Chargement des données
   # Nouvelle version avec arrow, encore 10x plus rapide
-  flux <- open_dataset("data/Recensement/FD_MOBPRO_2016_2019.parquet")
+  flux <- open_dataset("FD_MOBPRO_2016_2019.parquet",
+                       partitioning = c("annee", "epci_resid", "epci_travail"))
   
   # Cette fonction liste les code communes correspondant à une intercommunalité
   # Elle prend les arguments suivants en entrée :
@@ -84,27 +105,28 @@ server <- function(input, output) {
   # - Une chaîne de caractères correspondant à une intercommunalité
   communes_interco <- function(interco, registre_interco = EPCI_FR) {
     # TODO : inlure des tests
-    registre_interco %>% 
+    registre_interco %>%
       filter(LIBEPCI == interco) %>%
       select(CODGEO, LIBGEO)
   }
-  
-  # On liste les communes à garder
-  communes <- reactive({ communes_interco(interco = "Nantes Métropole") })
+
+  # # On liste les communes à garder
+  communes <- reactive({ communes_interco(interco = input$epci) })
   
   # On crée une variable réactive avec la matrice origine-destination sélectionnée
   flux_epci <- reactive({ 
     my_communes <- communes()
     # On filtre la donnée de flux pour ne garder que ces communes
     flux %>%
-      filter(annee == as.integer("2018")) %>%
-      select(-annee) %>%
-      filter(COMMUNE %in% my_communes$CODGEO | DCLT %in% my_communes$CODGEO) %>%
-      # On crée des intitulés lisibles: nom de commune au lieu des numéros
-      left_join(rename(my_communes, `Commune de résidence` = LIBGEO), 
-                by = c("COMMUNE" = "CODGEO")) %>%
-      left_join(rename(my_communes, `Commune de travail` = LIBGEO), 
-                by = c("DCLT" = "CODGEO"))
+      filter(annee == as.integer(input$annee) & epci_resid == input$epci &
+             epci_travail == input$epci) %>%
+      select(-annee, -epci_resid, -epci_travail) %>%
+      to_duckdb()
+      # # On crée des intitulés lisibles: nom de commune au lieu des numéros
+      # left_join(rename(my_communes, `Commune de résidence` = LIBGEO), 
+      #           by = c("COMMUNE" = "CODGEO")) %>%
+      # left_join(rename(my_communes, `Commune de travail` = LIBGEO), 
+      #           by = c("DCLT" = "CODGEO"))
   })
 
   intermediaire_total <- reactive({
@@ -116,7 +138,7 @@ server <- function(input, output) {
   matrice_od_epci <- reactive({
     # Cette étape est factultative mais fait gagner ~2secondes de traitement
     # car dplyr est un peu plus rapide que ggplot2
-    flux_epci() %>%
+   flux_epci() %>%
       group_by(`Mode de transport`, `Commune de résidence`, `Commune de travail`) %>%
       summarise(`Flux domicile-travail` = sum(IPONDI, na.rm = TRUE)) %>%
       left_join(intermediaire_total(), by = c("Commune de résidence", 
@@ -124,8 +146,8 @@ server <- function(input, output) {
       mutate(part_mod = `Flux domicile-travail` / `Flux total par paire de communes`,
              txt = paste(`Mode de transport`, "\nPart modale :", 
                          round(part_mod * 100, 1), "%\nTrajets :", 
-                         round(`Flux domicile-travail`), "/", 
-                         round(`Flux total par paire de communes`))) %>%
+                         round(`Flux domicile-travail`, 0), "/", 
+                         round(`Flux total par paire de communes`, 0))) %>%
       collect()
   })
   
@@ -208,7 +230,7 @@ server <- function(input, output) {
       filter(`Commune de résidence` != `Commune de travail`) %>%
       mutate(`Nombre total de trajets` = rowSums(across(where(is.numeric)), 
                                                  na.rm = TRUE),
-             `Nombre total de trajets` = round(`Nombre total de trajets`))
+             `Nombre total de trajets` = round(`Nombre total de trajets`, 0))
   })
 
   # On utilise la fonction du od2line du package stplanr
@@ -262,7 +284,7 @@ server <- function(input, output) {
       right_join(count(my_flux, `Commune de résidence`, wt = IPONDI), 
                  by = "Commune de résidence") %>%
       mutate(part_mod = paste("Part modale :", round(n.x / n.y * 100, 1), "%",
-                              "\nTrajets :", round(n.x), "/", round(n.y))) %>%
+                              "\nTrajets :", round(n.x, 0), "/", round(n.y, 0))) %>%
       ggplot(aes(x = `Commune de résidence`, weight = n.x,
                  fill = `Mode de transport`, 
                  text = part_mod)) + # A ajouter pour les modes de transport
