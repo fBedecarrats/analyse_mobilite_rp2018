@@ -1,62 +1,66 @@
 # library(shiny)
 # reactiveConsole(enabled = TRUE) # A lancer pour exécuter dans la console
 
+
+
+librairies_requises <- c( # On liste les librairies dont on a besoin
+  "shiny", # Pour faire tourner l'application shiny
+  "readxl", # pour lire les fichiers excel (liste communes/epci)
+  "vroom", # pour lire les csv (très rapide pour les 'gros' csv)
+  "dplyr", # pour les manipulation de données
+  "tidyr", # Pour les pivots
+  "ggplot2", # pour les graphs
+  "plotly", # pour des graphs interactifs
+  "ggiraph", # Pour des graphs interactifs
+  "forcats", # pour modifier des facteurs (variables catégorielles ordonnées)
+  "sf", # gère les objets spatiaux, cf. https://geocompr.robinlovelace.net
+  "stplanr", # Pour les routes
+  "tmap", # pour les cartes
+  "purrr", # Pour des opérations vectorisées
+  "arrow", # Pour de la lecture performante de fichiers volumineur
+  "duckdb", # Pour gérer des fichiers plus volumineux que la mémoire (sur shinyapps)
+  "waiter") # Pour des animations d'attente
+
+# On regarde parmi ces librairies lesquelles ne sont pas installées
+manquantes <- !(librairies_requises %in% installed.packages())
+# On installe celles qui manquent
+if(any(manquantes)) install.packages(librairies_requises[manquantes])
+# Il faut absolument avoir  arrow à jour
+options(timeout = max(300, getOption("timeout"))) # On étend le timeout car duckdb est long à télécharger
+update.packages(oldPkgs = c("arrow"), ask = FALSE)
+
 # On liste les librairies dont on a besoin
-  library(shiny) # Pour faire tourner l'application shiny
-  library(readxl) # pour lire les fichiers excel (liste communes/epci)
-  library(vroom) # pour lire les csv (très rapide pour les 'gros' csv)
-  library(dplyr) # pour les manipulation de données
-  library(tidyr) # Pour les pivots
-  library(ggplot2) # pour les graphs
-  library(plotly) # pour des graphs interactifs
-  library(ggiraph) # Pour des graphs interactifs
-  library(forcats) # pour modifier des facteurs (variables catégorielles ordonnées)
-  library(sf) # gère les objets spatiaux, cf. https://geocompr.robinlovelace.net
-  library(stplanr) # Pour les routes
-  library(tmap) # pour les cartes
-  library(purrr) # Pour des opérations vectorisées
-  library(arrow) # Pour de la lecture performante de fichiers volumineur
-  library(duckdb)# Pour gérer des fichiers plus volumineux que la mémoire (sur shinyapps)
-  library(waiter) # Pour des animations d'attente
+library(shiny) # Pour faire tourner l'application shiny
+library(readxl) # pour lire les fichiers excel (liste communes/epci)
+library(vroom) # pour lire les csv (très rapide pour les 'gros' csv)
+library(dplyr) # pour les manipulation de données
+library(tidyr) # Pour les pivots
+library(ggplot2) # pour les graphs
+library(plotly) # pour des graphs interactifs
+library(ggiraph) # Pour des graphs interactifs
+library(forcats) # pour modifier des facteurs (variables catégorielles ordonnées)
+library(sf) # gère les objets spatiaux, cf. https://geocompr.robinlovelace.net
+library(stplanr) # Pour les routes
+library(tmap) # pour les cartes
+library(purrr) # Pour des opérations vectorisées
+library(arrow) # Pour de la lecture performante de fichiers volumineur
+# library(duckdb)# Pour gérer des fichiers plus volumineux que la mémoire (sur shinyapps)
+library(waiter) # Pour des animations d'attente
 
 
-# librairies_requises <- c( # On liste les librairies dont on a besoin
-#   "shiny", # Pour faire tourner l'application shiny
-#   "readxl", # pour lire les fichiers excel (liste communes/epci)
-#   "vroom", # pour lire les csv (très rapide pour les 'gros' csv)
-#   "dplyr", # pour les manipulation de données
-#   "tidyr", # Pour les pivots
-#   "ggplot2", # pour les graphs
-#   "plotly", # pour des graphs interactifs
-#   "ggiraph", # Pour des graphs interactifs
-#   "forcats", # pour modifier des facteurs (variables catégorielles ordonnées)
-#   "sf", # gère les objets spatiaux, cf. https://geocompr.robinlovelace.net
-#   "stplanr", # Pour les routes
-#   "tmap", # pour les cartes
-#   "purrr", # Pour des opérations vectorisées
-#   "arrow", # Pour de la lecture performante de fichiers volumineur
-#   "duckdb", # Pour gérer des fichiers plus volumineux que la mémoire (sur shinyapps)
-#   "waiter") # Pour des animations d'attente
-# 
-# # On regarde parmi ces librairies lesquelles ne sont pas installées
-# manquantes <- !(librairies_requises %in% installed.packages())
-# # On installe celles qui manquent
-# if(any(manquantes)) install.packages(librairies_requises[manquantes])
-# # Il faut absolument avoir  arrow à jour
-# update.packages(oldPkgs = c("arrow", "duckdb"), ask = FALSE)
-# # On charge toutes les librairies requises
-# invisible(lapply(librairies_requises, require, character.only= TRUE))
+# On charge toutes les librairies requises
+invisible(lapply(librairies_requises, require, character.only= TRUE))
 
 
 
 # Pour préparer le jeu de données en entrée
-if (!file.exists("FD_MOBPRO_2016_2019.parquet")) {
+if (!file.exists("Recensement/FD_MOBPRO_2016_2019.parquet")) {
   source("prep_files.R")
 }
 
 
 # On charge la liste des communes de 2018 (on pourrait en avoir plusieurs verisons)
-EPCI_FR <- read_excel("Intercommunalite_Metropole_au_01-01-2019.xls", 
+EPCI_FR <- read_excel("Recensement/Intercommunalite_Metropole_au_01-01-2018.xls", 
                       sheet = "Composition_communale", skip = 5) %>%
   select(LIBEPCI, CODGEO, LIBGEO)
 
@@ -96,7 +100,7 @@ ui <- fluidPage(
 server <- function(input, output) {
   # Chargement des données
   # Nouvelle version avec arrow, encore 10x plus rapide
-  flux <- open_dataset("FD_MOBPRO_2016_2019.parquet",
+  flux <- open_dataset("Recensement/FD_MOBPRO_2016_2019.parquet",
                        partitioning = c("annee", "epci_resid", "epci_travail"))
   
   # Cette fonction liste les code communes correspondant à une intercommunalité

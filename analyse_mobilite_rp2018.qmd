@@ -36,7 +36,7 @@ library(vroom) # Pour une lecture plus performante des csv volumineux
 On utilise vroom qui est \~10x plus rapide pour lire de gros fichiers (pour l'application shiny, on utilisera arrow/parquet, encore 10x plus rapide)
 
 ```{r}
-flux <- vroom("data/Recensement/FD_MOBPRO_2018.csv",
+flux <- vroom("Recensement/FD_MOBPRO_2018.zip",
               col_types = cols_only( # on ne charge que certaines colonnes
                 COMMUNE = "character", # commune de résidence
                 DCLT = "factor", # commune de travail
@@ -47,7 +47,7 @@ flux <- vroom("data/Recensement/FD_MOBPRO_2018.csv",
 On reprend la base des communes/epci pour l'année correspondante
 
 ```{r}
-EPCI_FR <- read_excel("data/Recensement/Intercommunalite_Metropole_au_01-01-2018.xls", 
+EPCI_FR <- read_excel("Recensement/Intercommunalite_Metropole_au_01-01-2018.xls", 
                       sheet = "Composition_communale", skip = 5)
 ```
 
