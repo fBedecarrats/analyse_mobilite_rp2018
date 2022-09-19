@@ -1,6 +1,6 @@
 # analyse_mobilite_rp2018
 
-This is a hands-on tutorial on how to use R+Rstudio (and Shiny) with a use case on 2018 French census data.
+*This is a hands-on tutorial on how to use R+Rstudio (and Shiny) with a use case on 2018 French census data.*
 
 Ce dépôt contient des fichiers utilisés dans le cadre d'une formation-action menée à Nantes Métropole. Il s'agissait d'un temps informel mais régulier d'initiation à R, avec un groupe de 6 collègues. Il s'agissait d'une mise en oeuvre pratique, qui a débouché sur la réalisation de deux rendus :
 
